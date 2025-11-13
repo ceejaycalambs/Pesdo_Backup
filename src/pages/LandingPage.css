@@ -175,6 +175,8 @@ nav a {
     color: white;
 }
 
+
+
 /* HERO SECTION */
 .hero {
     height: 100vh; /* Full screen height */
@@ -512,6 +514,194 @@ footer {
     }
 }
 
+/* Login Dropdown Styles */
+.login-dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.login-dropdown-btn {
+    position: relative;
+    padding-right: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 90px;
+}
+
+.login-dropdown-btn::after {
+    content: '▼';
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.7rem;
+    transition: transform 0.3s ease;
+    color: inherit;
+    pointer-events: none;
+}
+
+.login-dropdown:hover .login-dropdown-btn::after {
+    transform: translateY(-50%) rotate(180deg);
+}
+
+.login-dropdown-content {
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border: 1px solid #e1e5e9;
+    min-width: 300px;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-15px) scale(0.95);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.login-dropdown:hover .login-dropdown-content {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0) scale(1);
+}
+
+.login-option {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 18px 20px;
+    text-decoration: none;
+    color: #333;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border-bottom: 1px solid #f0f0f0;
+    position: relative;
+}
+
+.login-option:last-child {
+    border-bottom: none;
+}
+
+.login-option:hover {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    color: #005177;
+    transform: translateX(8px);
+    box-shadow: inset 4px 0 0 #005177;
+}
+
+.login-option.admin-option {
+    border-top: 2px solid #e1e5e9;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.login-option.admin-option:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    color: #6c757d;
+    transform: translateX(8px);
+    box-shadow: inset 4px 0 0 #6c757d;
+}
+
+.login-option.admin-option .login-text strong {
+    color: #6c757d;
+}
+
+.login-option:hover .login-icon {
+    background: linear-gradient(135deg, #005177 0%, #0079a1 100%);
+    color: white;
+    transform: scale(1.1);
+}
+
+.login-icon {
+    font-size: 1.4rem;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 2px solid #e1e5e9;
+}
+
+.login-text {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+}
+
+.login-text strong {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #333;
+    line-height: 1.2;
+}
+
+.login-text small {
+    font-size: 0.9rem;
+    color: #666;
+    font-weight: 400;
+    line-height: 1.3;
+}
+
+/* Login Options in Hero and Final CTA */
+.login-options, .final-login-options {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.login-options .btn, .final-login-options .btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 160px;
+    justify-content: center;
+}
+
+.btn-icon {
+    font-size: 1.1rem;
+}
+
+.btn-text {
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .login-options, .final-login-options {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .login-options .btn, .final-login-options .btn {
+        width: 100%;
+        min-width: auto;
+    }
+    
+    .login-dropdown-content {
+        right: -10px;
+        min-width: 280px;
+        max-width: calc(100vw - 40px);
+    }
+    
+    .login-option {
+        padding: 16px 18px;
+    }
+    
+    .login-icon {
+        width: 38px;
+        height: 38px;
+        font-size: 1.2rem;
+    }
+}
+
 /* Reduce motion preference */
 @media (prefers-reduced-motion: reduce) {
     [data-aos] {
@@ -521,5 +711,11 @@ footer {
     }
     .hero {
         background-attachment: scroll; /* disable parallax */
+    }
+    .login-dropdown-content {
+        transition: none;
+    }
+    .login-option {
+        transition: none;
     }
 }

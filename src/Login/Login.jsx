@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import "./Login.css";
 import { FaEnvelope, FaLock, FaEye, FaEyeSlash } from "react-icons/fa";
 import Logo_pesdo from "../assets/Logo_pesdo.png";
@@ -7,12 +7,54 @@ import { useAuth } from "../contexts/AuthContext.jsx";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [searchParams] = useSearchParams();
+  const auth = useAuth();
+  const { login, currentUser, userData, loading: authLoading, profileLoaded } = auth || {};
+  const [email, setEmail] = useState("jester@gmail.com");
+  const [password, setPassword] = useState("Cjcalamba@12");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  // Get user type from URL parameter
+  const userType = searchParams.get('type') || 'jobseeker';
+
+  // Handle redirection after successful login
+  useEffect(() => {
+    if (!auth) return; // Ensure auth context is available
+    
+    console.log('Login useEffect - Auth state:', { 
+      currentUser: !!currentUser, 
+      userData: !!userData, 
+      authLoading,
+      userEmail: currentUser?.email,
+      userId: currentUser?.id
+    });
+    
+    console.log('🔍 Login redirect check:', {
+      hasCurrentUser: !!currentUser,
+      authLoadingComplete: !authLoading,
+      profileLoaded: profileLoaded,
+      shouldRedirect: currentUser && !authLoading && profileLoaded
+    });
+    
+    // Redirect when user is authenticated, auth loading is false, and profile is loaded
+    if (currentUser && !authLoading && profileLoaded) {
+      console.log('✅ User authenticated and profile loaded, redirecting to dashboard...');
+      console.log('User type from URL:', userType);
+      console.log('User data:', userData);
+      console.log('User type from userData:', userData?.userType);
+      
+      // Redirect based on userData.userType (determined from database profile)
+      if (userData?.userType === 'employer') {
+        console.log('Redirecting to employer dashboard');
+        navigate('/employer');
+      } else {
+        console.log('Redirecting to jobseeker dashboard');
+        navigate('/jobseeker'); // Default to jobseeker
+      }
+    }
+  }, [currentUser, userData, authLoading, profileLoaded, navigate, auth]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,14 +67,29 @@ const Login = () => {
 
     try {
       setLoading(true);
-      await login(email, password);
-      // Login successful - user will be redirected by the auth context
-      // No need to navigate manually as AuthContext will handle redirection
+      
+      // Auth is working, just call it directly with expected user type
+      console.log('🔍 Login attempt - Email:', email, 'Expected UserType:', userType);
+      await login(email, password, userType);
+      
+      console.log('Login completed successfully');
+      // Login successful - user will be redirected by the useEffect
+      setLoading(false);
     } catch (err) {
       console.error('Login error:', err);
       let errorMessage = 'Failed to login. Please try again.';
       
-      if (err.code === 'auth/user-not-found') {
+      if (err.message?.includes('timeout')) {
+        errorMessage = 'Login timed out after 15 seconds. Please try again or check your credentials.';
+      } else if (err.message?.includes('Supabase auth timeout')) {
+        errorMessage = 'Authentication service is slow. Please try again in a moment.';
+      } else if (err.message?.includes('Cannot connect to Supabase')) {
+        errorMessage = 'Cannot connect to the server. Please check your internet connection.';
+      } else if (err.message?.includes('Invalid login credentials')) {
+        errorMessage = 'Invalid email or password. Please check your credentials.';
+      } else if (err.message?.includes('Email not confirmed')) {
+        errorMessage = 'Please check your email and confirm your account before logging in.';
+      } else if (err.code === 'auth/user-not-found') {
         errorMessage = 'No account found with this email address.';
       } else if (err.code === 'auth/wrong-password') {
         errorMessage = 'Incorrect password. Please try again.';
@@ -40,6 +97,8 @@ const Login = () => {
         errorMessage = 'Please enter a valid email address.';
       } else if (err.code === 'auth/too-many-requests') {
         errorMessage = 'Too many failed attempts. Please try again later.';
+      } else if (err.message?.includes('This account is registered as')) {
+        errorMessage = err.message;
       }
       
       setError(errorMessage);
@@ -67,7 +126,19 @@ const Login = () => {
           <div className="login-header">
             <img src={Logo_pesdo} alt="PESDO Logo" className="login-logo" />
             <h2>Welcome Back</h2>
-            <p>Login to access your PESDO account</p>
+            <p>
+              {userType === 'employer' ? (
+                <>
+                  <span className="login-type-badge employer">🏢</span>
+                  Login to your Employer Dashboard
+                </>
+              ) : (
+                <>
+                  <span className="login-type-badge jobseeker">👤</span>
+                  Login to your Jobseeker Dashboard
+                </>
+              )}
+            </p>
           </div>
 
           {error && <div className="error-message">{error}</div>}

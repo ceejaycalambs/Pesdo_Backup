@@ -1,0 +1,439 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../supabase.js';
+import './EmployerVerification.css';
+
+const EmployerVerificationSimple = () => {
+  const navigate = useNavigate();
+  const [employers, setEmployers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedEmployer, setSelectedEmployer] = useState(null);
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationNotes, setVerificationNotes] = useState('');
+  const [verificationStatus, setVerificationStatus] = useState('pending');
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [stats, setStats] = useState({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0
+  });
+
+  // Fetch employers directly from employer_profiles
+  const fetchEmployers = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('employer_profiles')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      console.log('📊 Fetched employers:', data);
+      setEmployers(data || []);
+      
+      // Calculate stats - handle null verification_status
+      const total = data?.length || 0;
+      const pending = data?.filter(emp => !emp.verification_status || emp.verification_status === 'pending').length || 0;
+      const approved = data?.filter(emp => emp.verification_status === 'approved').length || 0;
+      const rejected = data?.filter(emp => emp.verification_status === 'rejected').length || 0;
+      
+      setStats({ total, pending, approved, rejected });
+    } catch (error) {
+      console.error('Error fetching employers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle verification
+  const handleVerification = async () => {
+    try {
+      setIsUpdating(true);
+      console.log('🔄 Updating verification:', {
+        employerId: selectedEmployer.id,
+        newStatus: verificationStatus,
+        notes: verificationNotes
+      });
+
+      const updateData = {
+        verification_status: verificationStatus,
+        verification_notes: verificationNotes
+      };
+
+      // Only add verified_at if status is approved
+      if (verificationStatus === 'approved') {
+        updateData.verified_at = new Date().toISOString();
+      }
+
+      console.log('📤 Update data:', updateData);
+
+      const { data, error } = await supabase
+        .from('employer_profiles')
+        .update(updateData)
+        .eq('id', selectedEmployer.id)
+        .select();
+
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        throw error;
+      }
+
+      console.log('✅ Update successful:', data);
+
+      // Create notification for employer about verification update
+      if (verificationStatus === 'approved' || verificationStatus === 'rejected') {
+        try {
+          const isApproved = verificationStatus === 'approved';
+          const notesText = !isApproved && verificationNotes ? ` Notes: ${verificationNotes}` : '';
+          const notificationMessage = isApproved
+            ? '🎉 Your employer account has been approved. You can now post job vacancies.'
+            : `⚠️ Your employer verification status is now REJECTED.${notesText}`;
+
+          await supabase
+            .from('notifications')
+            .insert([
+              {
+                employer_id: selectedEmployer.id,
+                type: isApproved ? 'employer_verification_approved' : 'employer_verification_rejected',
+                title: isApproved ? 'Employer Verification Approved' : 'Employer Verification Update',
+                message: notificationMessage,
+                is_read: false,
+                created_at: new Date().toISOString()
+              }
+            ]);
+        } catch (notificationError) {
+          console.error('❌ Error creating employer verification notification:', notificationError);
+        }
+      }
+
+      // Refresh data
+      await fetchEmployers();
+      
+      // Close modal
+      setShowVerificationModal(false);
+      setSelectedEmployer(null);
+      setVerificationNotes('');
+      setVerificationStatus('pending');
+      
+      // Show success notification
+      setNotification({
+        type: 'success',
+        message: `✅ Employer verification updated to: ${verificationStatus}`,
+        show: true
+      });
+      
+      // Auto-hide notification after 5 seconds
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 5000);
+    } catch (error) {
+      console.error('❌ Error updating verification:', error);
+      
+      // Show error notification
+      setNotification({
+        type: 'error',
+        message: `❌ Error updating verification: ${error.message}`,
+        show: true
+      });
+      
+      // Auto-hide notification after 7 seconds (longer for errors)
+      setTimeout(() => {
+        setNotification(prev => ({ ...prev, show: false }));
+      }, 7000);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Open verification modal
+  const openVerificationModal = (employer) => {
+    setSelectedEmployer(employer);
+    setVerificationNotes(employer.verification_notes || '');
+    setVerificationStatus(employer.verification_status || 'pending');
+    setShowVerificationModal(true);
+  };
+
+  useEffect(() => {
+    fetchEmployers();
+  }, []);
+
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      pending: { class: 'status-pending', text: '⏳ Pending', color: '#f59e0b' },
+      approved: { class: 'status-approved', text: '✅ Approved', color: '#10b981' },
+      rejected: { class: 'status-rejected', text: '❌ Rejected', color: '#ef4444' }
+    };
+    
+    const config = statusConfig[status] || statusConfig.pending;
+    return (
+      <span className={`status-badge ${config.class}`} style={{ backgroundColor: config.color }}>
+        {config.text}
+      </span>
+    );
+  };
+
+  const getDocumentStatus = (employer) => {
+    const hasBIR = employer.bir_document_url;
+    const hasBusinessPermit = employer.business_permit_url;
+    
+    if (hasBIR && hasBusinessPermit) {
+      return <span className="document-status complete">📄 Complete</span>;
+    } else {
+      return <span className="document-status incomplete">⚠️ Incomplete</span>;
+    }
+  };
+
+  if (loading) {
+    return <div className="loading">Loading employer verification...</div>;
+  }
+
+  return (
+    <div className="employer-verification">
+      {/* Header - Matching Admin Dashboard */}
+      <div className="verification-page-header">
+        <div className="header-content">
+          <div className="header-left">
+            <h1>🏢 Employer Verification</h1>
+            <p>Review and verify employer documents before they can post job vacancies.</p>
+          </div>
+          <button 
+            className="back-btn"
+            onClick={() => navigate('/admin/dashboard')}
+          >
+            ← Back to Dashboard
+          </button>
+        </div>
+      </div>
+
+      {/* Notification */}
+      {notification && notification.show && (
+        <div className={`notification ${notification.type}`}>
+          <div className="notification-content">
+            <span className="notification-message">{notification.message}</span>
+            <button 
+              className="notification-close"
+              onClick={() => setNotification(prev => ({ ...prev, show: false }))}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="verification-main">
+        <div className="verification-header">
+          <h2>Verification Overview</h2>
+          <p>Manage employer account verification and document review process.</p>
+        </div>
+
+      {/* Statistics Cards */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <h3>Total Employers</h3>
+          <div className="stat-number">{stats.total}</div>
+        </div>
+        <div className="stat-card pending">
+          <h3>Pending Review</h3>
+          <div className="stat-number">{stats.pending}</div>
+        </div>
+        <div className="stat-card approved">
+          <h3>Approved</h3>
+          <div className="stat-number">{stats.approved}</div>
+        </div>
+        <div className="stat-card rejected">
+          <h3>Rejected</h3>
+          <div className="stat-number">{stats.rejected}</div>
+        </div>
+      </div>
+
+      {/* Employers List - Table View for Admin Efficiency */}
+      <div className="employers-list">
+        <h2>Employers Awaiting Verification</h2>
+        
+        {employers.length === 0 ? (
+          <div className="no-employers">
+            <div className="no-employers-icon">🎉</div>
+            <h3>All caught up!</h3>
+            <p>No employers are currently awaiting verification.</p>
+          </div>
+        ) : (
+          <div className="verification-table-container">
+            <table className="verification-table">
+              <thead>
+                <tr>
+                  <th>Business Name</th>
+                  <th>Contact Person</th>
+                  <th>Email</th>
+                  <th>Establishment Type</th>
+                  <th>Documents</th>
+                  <th>Status</th>
+                  <th>Registered</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employers.map((employer) => (
+                  <tr key={employer.id} className="employer-row">
+                    <td className="business-name">
+                      <div className="business-info">
+                        <strong>{employer.business_name || 'No Business Name'}</strong>
+                        {employer.acronym && (
+                          <span className="acronym">({employer.acronym})</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="contact-person">
+                      <div className="contact-info">
+                        <div>{employer.contact_person_name || '-'}</div>
+                        <div className="position">{employer.contact_position || ''}</div>
+                      </div>
+                    </td>
+                    <td className="email">
+                      <a href={`mailto:${employer.email}`} className="email-link">
+                        {employer.email}
+                      </a>
+                    </td>
+                    <td className="establishment-type">
+                      {employer.establishment_type || '-'}
+                    </td>
+                    <td className="documents">
+                      <div className="document-status">
+                        {employer.bir_document_url && (
+                          <button 
+                            className="document-btn bir"
+                            onClick={() => window.open(employer.bir_document_url, '_blank')}
+                            title="View BIR Document"
+                          >
+                            📄 BIR
+                          </button>
+                        )}
+                        {employer.business_permit_url && (
+                          <button 
+                            className="document-btn permit"
+                            onClick={() => window.open(employer.business_permit_url, '_blank')}
+                            title="View Business Permit"
+                          >
+                            🏢 Permit
+                          </button>
+                        )}
+                        {!employer.bir_document_url && !employer.business_permit_url && (
+                          <span className="no-documents">No documents</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="status">
+                      {getStatusBadge(employer.verification_status || 'pending')}
+                    </td>
+                    <td className="registered-date">
+                      {new Date(employer.created_at).toLocaleDateString()}
+                    </td>
+                    <td className="actions">
+                      <div className="action-buttons">
+                        <button 
+                          className="btn-primary btn-sm"
+                          onClick={() => openVerificationModal(employer)}
+                        >
+                          {employer.verification_status === 'pending' ? 'Review' : 'Update'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      </div>
+
+      {/* Verification Modal */}
+      {showVerificationModal && selectedEmployer && (
+        <div className="modal-overlay" onClick={() => setShowVerificationModal(false)}>
+          <div className="modal-content verification-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Review Documents - {selectedEmployer.business_name || 'No Business Name'}</h2>
+            </div>
+            
+            <div className="modal-body">
+              <div className="verification-form">
+                <div className="form-group">
+                  <label>Verification Status</label>
+                  <select 
+                    value={verificationStatus}
+                    onChange={(e) => setVerificationStatus(e.target.value)}
+                    className="form-select"
+                  >
+                    <option value="pending">⏳ Pending</option>
+                    <option value="approved">✅ Approved</option>
+                    <option value="rejected">❌ Rejected</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Verification Notes</label>
+                  <textarea
+                    value={verificationNotes}
+                    onChange={(e) => setVerificationNotes(e.target.value)}
+                    className="form-textarea"
+                    rows="4"
+                    placeholder="Add notes about the verification decision..."
+                  />
+                </div>
+
+                <div className="document-links">
+                  <h4>Review Documents:</h4>
+                  <div className="document-buttons">
+                    {selectedEmployer.bir_document_url && (
+                      <button 
+                        className="btn-secondary"
+                        onClick={() => window.open(selectedEmployer.bir_document_url, '_blank')}
+                      >
+                        📄 View BIR Document
+                      </button>
+                    )}
+                    {selectedEmployer.business_permit_url && (
+                      <button 
+                        className="btn-secondary"
+                        onClick={() => window.open(selectedEmployer.business_permit_url, '_blank')}
+                      >
+                        🏢 View Business Permit
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary"
+                onClick={() => setShowVerificationModal(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-primary"
+                onClick={handleVerification}
+                disabled={isUpdating}
+              >
+                {isUpdating ? (
+                  <>
+                    <div className="loading-spinner"></div>
+                    Updating...
+                  </>
+                ) : (
+                  'Update Verification'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EmployerVerificationSimple;

@@ -1,0 +1,1194 @@
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.8rem;
+  border: 1px solid transparent;
+  background: #e2e8f0;
+  color: #1f2937;
+}
+
+.status-pill.pending {
+  background: rgba(59, 130, 246, 0.15);
+  color: #1d4ed8;
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.status-pill.approved {
+  background: rgba(34, 197, 94, 0.15);
+  color: #047857;
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.status-pill.rejected {
+  background: rgba(239, 68, 68, 0.15);
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+/* User Management Styles - Matching JobseekerDashboard */
+.user-management {
+  min-height: 100vh;
+  background: #e8e8e8;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Header - Matching JobseekerDashboard */
+.user-management-header {
+  background: linear-gradient(90deg, #005177, #0079a1);
+  color: white;
+  padding: 20px 0;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
+}
+
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-left h1 {
+  margin: 0 0 8px 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: white;
+}
+
+.header-left p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+  font-weight: 500;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.refresh-btn {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #005177 !important;
+  border: 1px solid rgba(0, 81, 119, 0.4) !important;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  font-weight: 700 !important;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refresh-btn:hover {
+  background: white !important;
+  color: #005177 !important;
+  border-color: #005177 !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 81, 119, 0.3);
+}
+
+.back-btn {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #6c757d !important;
+  border: 1px solid rgba(108, 117, 125, 0.4) !important;
+  padding: 12px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  font-weight: 700 !important;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.back-btn:hover {
+  background: white !important;
+  color: #495057 !important;
+  border-color: #6c757d !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+}
+
+/* Error Banner */
+.error-banner {
+  background: #f8d7da;
+  color: #721c24;
+  padding: 15px 20px;
+  margin: 20px;
+  border-radius: 8px;
+  border: 1px solid #f5c6cb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.error-banner p {
+  margin: 0;
+  font-weight: 500;
+}
+
+.retry-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+}
+
+.retry-btn:hover {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
+/* Tab Navigation - Matching JobseekerDashboard Style */
+.tab-navigation {
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 0;
+  display: flex;
+  gap: 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  border-radius: 0;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.tab-button {
+  background: none;
+  border: none;
+  padding: 20px 30px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #6c757d;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s ease;
+  position: relative;
+  flex: 1;
+  text-align: center;
+}
+
+.tab-button:hover {
+  color: #005177;
+  background: #f0f8ff;
+}
+
+.tab-button.active {
+  color: #005177;
+  border-bottom-color: #005177;
+  background: #f0f8ff;
+}
+
+/* Search and Filter Section */
+.search-filter-section {
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.search-filter-container {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 15px;
+}
+
+.search-box {
+  flex: 1;
+  min-width: 300px;
+}
+
+.search-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 15px;
+  color: #6c757d;
+  font-size: 1.1rem;
+  z-index: 1;
+}
+
+.search-input {
+  width: 100%;
+  padding: 12px 15px 12px 45px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #005177;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0, 81, 119, 0.1);
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  z-index: 1;
+}
+
+.clear-search-btn:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.filter-controls {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.filter-group label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #005177;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-select, .sort-select {
+  padding: 8px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 150px;
+}
+
+.filter-select:focus, .sort-select:focus {
+  outline: none;
+  border-color: #005177;
+  box-shadow: 0 0 0 2px rgba(0, 81, 119, 0.1);
+}
+
+.clear-filters-btn {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.clear-filters-btn:hover {
+  background: #f5c6cb;
+  transform: translateY(-1px);
+}
+
+.results-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 15px;
+  border-top: 1px solid #e9ecef;
+}
+
+.results-count {
+  font-size: 0.9rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.active-filters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-tag {
+  background: #e3f2fd;
+  color: #005177;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: 1px solid #bbdefb;
+}
+
+/* Employment Status Styles */
+.employment-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.employment-status.employed {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.employment-status.unemployed {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+/* Main Content - Matching Admin Dashboard */
+.user-management-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.users-section h2 {
+  color: #333;
+  font-size: 1.8rem;
+  margin: 0 0 20px 0;
+  font-weight: 600;
+}
+
+/* Users Table - Matching JobseekerDashboard Cards */
+.users-table-container {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e0e0e0;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.users-table-container:hover {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.users-table thead {
+  background: #005177;
+}
+
+.users-table th {
+  padding: 20px 15px;
+  text-align: left;
+  font-weight: 600;
+  color: white;
+  border-bottom: 2px solid #f1f3f4;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.users-table td {
+  padding: 20px 15px;
+  border-bottom: 1px solid #e9ecef;
+  vertical-align: middle;
+}
+
+.users-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+/* User Info */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-avatar span {
+  font-size: 1.2rem;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #333;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.view-btn, .delete-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.view-btn {
+  background: #e3f2fd;
+  color: #005177;
+}
+
+.view-btn:hover {
+  background: #bbdefb;
+  transform: translateY(-1px);
+}
+
+.delete-btn {
+  background: #ffebee;
+  color: #d32f2f;
+}
+
+.delete-btn:hover {
+  background: #ffcdd2;
+  transform: translateY(-1px);
+}
+
+/* No Users Message - Matching JobseekerDashboard */
+.no-users-message {
+  background: white;
+  border: 2px dashed #dee2e6;
+  border-radius: 20px;
+  padding: 60px 20px;
+  text-align: center;
+  margin: 20px 0;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e0e0e0;
+}
+
+.no-users-message p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+/* Loading Screen */
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 20px;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #005177;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-screen p {
+  color: #6c757d;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Modal Styles - Matching JobseekerDashboard */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  border: 1px solid #e0e0e0;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.modal-header {
+  background: linear-gradient(90deg, #005177, #0079a1);
+  color: white;
+  padding: 20px 30px;
+  border-radius: 20px 20px 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  flex: 1;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  width: 35px;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.modal-body {
+  padding: 30px;
+}
+
+.profile-section {
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid #f1f3f4;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.profile-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar span {
+  font-size: 2rem;
+}
+
+.profile-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.user-type-badge {
+  display: inline-block;
+  background: #005177;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  align-items: stretch;
+}
+
+/* Details sections for organized display */
+.details-section {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+}
+
+.details-section h4 {
+  color: #005177;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 15px 0;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.details-section .detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  text-align: center;
+}
+
+.details-section .detail-item label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #5b6b7e;
+  letter-spacing: 0.04em;
+}
+
+.details-section .detail-item span {
+  font-size: 0.95rem;
+  color: #212529;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* BIR Document Section Styles */
+.document-section {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.document-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.document-icon {
+  font-size: 1.5rem;
+  color: #005177;
+}
+
+.document-details {
+  flex: 1;
+}
+
+.document-name {
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 5px 0;
+  font-size: 1rem;
+}
+
+.document-status {
+  color: #28a745;
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.document-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.view-document-btn, .download-document-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.view-document-btn {
+  background: #005177;
+  color: white;
+  border: 1px solid #005177;
+}
+
+.view-document-btn:hover {
+  background: #0079a1;
+  border-color: #0079a1;
+  transform: translateY(-1px);
+}
+
+.download-document-btn {
+  background: white;
+  color: #005177;
+  border: 1px solid #005177;
+}
+
+.download-document-btn:hover {
+  background: #005177;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.no-document {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  background: #f8f9fa;
+  border: 2px dashed #dee2e6;
+  border-radius: 8px;
+  color: #6c757d;
+}
+
+.no-document-icon {
+  font-size: 2rem;
+  opacity: 0.5;
+}
+
+.no-document p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.detail-item label {
+  font-weight: 600;
+  color: #005177;
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.detail-item span {
+  color: #333;
+  font-size: 1rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.resume-section {
+  grid-column: 1 / -1;
+}
+
+.resume-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 10px;
+}
+
+.resume-btn, .download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.resume-btn {
+  background: #e3f2fd;
+  color: #005177;
+  border: 1px solid #005177;
+}
+
+.resume-btn:hover {
+  background: #bbdefb;
+  transform: translateY(-2px);
+}
+
+.download-btn {
+  background: #f3e5f5;
+  color: #7b1fa2;
+  border: 1px solid #7b1fa2;
+}
+
+.download-btn:hover {
+  background: #e1bee7;
+  transform: translateY(-2px);
+}
+
+.modal-footer {
+  padding: 20px 30px;
+  border-top: 2px solid #f1f3f4;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.close-modal-btn {
+  background: #005177;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.close-modal-btn:hover {
+  background: #003d5c;
+  transform: translateY(-2px);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .header-content {
+    flex-direction: column;
+    gap: 20px;
+    text-align: center;
+  }
+  
+  .header-left h1 {
+    font-size: 2rem;
+  }
+  
+  .tab-navigation {
+    flex-direction: column;
+  }
+  
+  .tab-button {
+    border-bottom: none;
+    border-right: 3px solid transparent;
+  }
+  
+  .tab-button.active {
+    border-bottom: none;
+    border-right-color: #667eea;
+  }
+  
+  .users-table-container {
+    overflow-x: auto;
+  }
+  
+  .users-table {
+    min-width: 600px;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+  }
+  
+  .view-btn, .delete-btn {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .user-management-main {
+    padding: 20px 10px;
+  }
+  
+  .users-table th,
+  .users-table td {
+    padding: 15px 10px;
+    font-size: 0.9rem;
+  }
+  
+  .user-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .user-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Modal Responsive */
+  .modal-overlay {
+    padding: 10px;
+  }
+
+  .modal-content {
+    max-height: 95vh;
+  }
+
+  .modal-header {
+    padding: 15px 20px;
+  }
+
+  .modal-header h2 {
+    font-size: 1.3rem;
+  }
+
+  .modal-body {
+    padding: 20px;
+  }
+
+  .profile-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 15px;
+  }
+
+  .profile-avatar {
+    width: 60px;
+    height: 60px;
+  }
+
+  .profile-avatar span {
+    font-size: 1.5rem;
+  }
+
+  .details-grid {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .details-grid .details-section {
+    min-width: unset;
+    flex: none;
+  }
+
+  .document-actions {
+    flex-direction: column;
+  }
+
+  .view-document-btn, .download-document-btn {
+    justify-content: center;
+  }
+
+  .resume-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .resume-btn, .download-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .modal-footer {
+    padding: 15px 20px;
+  }
+
+  .close-modal-btn {
+    width: 100%;
+  }
+
+  /* Search and Filter Responsive */
+  .search-filter-container {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+
+  .search-box {
+    min-width: auto;
+  }
+
+  .filter-controls {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .filter-group {
+    width: 100%;
+  }
+
+  .filter-select, .sort-select {
+    width: 100%;
+    min-width: auto;
+  }
+
+  .clear-filters-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .results-summary {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+
+  .active-filters {
+    justify-content: center;
+  }
+}
+
+/* Verification Badge Styles */
+.verification-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.verification-badge.approved {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.verification-badge.rejected {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.verification-badge.under_review {
+  background: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.verification-badge.pending {
+  background: #e2e3e5;
+  color: #383d41;
+  border: 1px solid #d6d8db;
+}
+
+/* Verification Status Section */
+.verification-status-section {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.verification-badge-large {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.verification-notes {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #005177;
+}
+
+.verification-notes label {
+  font-weight: 600;
+  color: #005177;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.verification-notes p {
+  margin: 0;
+  color: #495057;
+  line-height: 1.5;
+}
+
+.verification-date {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.verification-date label {
+  font-weight: 600;
+  color: #005177;
+}
+
+.verification-date span {
+  color: #495057;
+  font-size: 0.9rem;
+}

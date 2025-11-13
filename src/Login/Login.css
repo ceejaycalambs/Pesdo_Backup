@@ -5,6 +5,94 @@
   font-family: 'Segoe UI', sans-serif;
 }
 
+/* Main container */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 20px 40px;
+  background: linear-gradient(135deg, #f4f7fa 0%, #e8f2f7 100%);
+}
+
+/* Login card */
+.login-card {
+  background: white;
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  width: 100%;
+  max-width: 450px;
+  animation: slideUp 0.6s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Login header */
+.login-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.login-header h1 {
+  color: #005177;
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.login-header p {
+  color: #666;
+  font-size: 1rem;
+  margin-bottom: 20px;
+}
+
+/* Login type badge */
+.login-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #005177, #0079a1);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
+.login-type-badge.jobseeker {
+  background: linear-gradient(135deg, #005177, #0079a1);
+}
+
+.login-type-badge.employer {
+  background: linear-gradient(135deg, #0079a1, #005177);
+}
+
+.badge-icon {
+  font-size: 1rem;
+}
+
+.badge-text {
+  font-size: 0.85rem;
+}
+
+/* Login form */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 /* Header matching landing page */
 .login-header-nav {
   position: fixed;
@@ -159,6 +247,72 @@
   font-size: 0.9rem;
 }
 
+.form-group input {
+  padding: 12px 16px;
+  border: 2px solid #e1e5e9;
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  background: #fafbfc;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #005177;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0, 81, 119, 0.1);
+}
+
+.form-group input::placeholder {
+  color: #999;
+}
+
+/* Password input container */
+.password-input-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-input-container input {
+  padding-right: 50px; /* Make room for the toggle button */
+}
+
+.password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.password-toggle:hover {
+  color: #005177;
+  background: rgba(0, 81, 119, 0.1);
+}
+
+.password-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.password-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
 .label-icon {
   color: #777;
   font-size: 14px;
@@ -206,23 +360,110 @@
   color: #005177;
 }
 
-.login-btn {
+/* Login button */
+.login-button {
   background: linear-gradient(135deg, #005177 0%, #0079a1 100%);
   color: white;
   border: none;
-  padding: 15px;
+  padding: 14px 28px;
   border-radius: 10px;
   font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 50px;
 }
 
-.login-btn:hover {
+.login-button:hover:not(:disabled) {
   transform: translateY(-2px);
   box-shadow: 0 10px 20px rgba(0, 81, 119, 0.3);
   background: linear-gradient(135deg, #004663 0%, #006989 100%);
+}
+
+.login-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.button-icon {
+  font-size: 1.1rem;
+}
+
+/* Spinner for loading state */
+/* Loading Animation - Admin Style */
+.loading-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Legacy spinner (keeping for backward compatibility) */
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error message */
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.error-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Success message */
+.success-message {
+  background: #efe;
+  border: 1px solid #cfc;
+  color: #363;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.success-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
 }
 
 .login-footer {
@@ -235,17 +476,19 @@
 .login-footer p {
   color: #666;
   font-size: 0.9rem;
+  margin: 8px 0;
 }
 
-.login-footer a {
+.register-link, .switch-login-link {
   color: #005177;
   text-decoration: none;
   font-weight: 600;
   transition: color 0.3s ease;
 }
 
-.login-footer a:hover {
+.register-link:hover, .switch-login-link:hover {
   color: #0079a1;
+  text-decoration: underline;
 }
 
 /* Responsive Design */
@@ -301,4 +544,20 @@
   .login-form {
     gap: 15px;
   }
+}
+
+/* Login Type Badge */
+.login-type-badge {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 1.2rem;
+  vertical-align: middle;
+}
+
+.login-type-badge.employer {
+  color: #0079a1;
+}
+
+.login-type-badge.jobseeker {
+  color: #005177;
 }

@@ -1,8 +1,1972 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from 'react';
+import NotificationButton from '../../components/NotificationButton';
+import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
+import { useAuth } from '../../contexts/AuthContext.jsx';
+import { supabase } from '../../supabase.js';
+import './EmployerDashboard.css';
+
+const NAV_ITEMS = [
+  { key: 'profile', label: 'Company Profile', icon: '🏢' },
+  { key: 'documents', label: 'Upload Documentary Requirements', icon: '📄' },
+  { key: 'submit', label: 'Submit a Job Vacancy', icon: '📝' },
+  { key: 'manage', label: 'Manage Job Vacancy', icon: '📋' }
+];
+
+const DOCUMENT_CONFIG = {
+  bir: {
+    label: 'BIR 2303 / Certificate of Registration',
+    column: 'bir_document_url',
+    folder: 'employers/bir',
+    accept: '.pdf,.jpg,.jpeg,.png',
+    helper: 'Upload your BIR registration certificate (PDF or image).'
+  },
+  permit: {
+    label: 'Business Permit / Mayor’s Permit',
+    column: 'business_permit_url',
+    folder: 'employers/business-permit',
+    accept: '.pdf,.jpg,.jpeg,.png',
+    helper: 'Upload your business permit (PDF or image).'
+  },
+  logo: {
+    label: 'Company Logo',
+    column: 'company_logo_url',
+    folder: 'employers/company-logo',
+    accept: '.jpg,.jpeg,.png,.webp',
+    helper: 'Upload your company logo (PNG/JPG/WebP).'
+  }
+};
+
+const formatStatusLabel = (value = '', options = {}) => {
+  const normalized = value.toString().trim().toLowerCase();
+  if (!normalized) return '';
+  if (options.treatApprovedAsVerified && normalized === 'approved') return 'Verified';
+
+  return normalized
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const formatDateLabel = (value) => {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+const formatJobseekerName = (profile, fallbackEmail) => {
+  if (!profile) return fallbackEmail || 'Jobseeker';
+  const parts = [profile.first_name, profile.last_name].filter(Boolean);
+  let name = parts.join(' ');
+  if (profile.suffix) {
+    name = `${name} ${profile.suffix}`.trim();
+  }
+  return name || profile.email || fallbackEmail || 'Jobseeker';
+};
+
+const getApplicationStatusClass = (status) => {
+  const normalized = (status || '').toString().trim().toLowerCase();
+  if (!normalized) return 'unknown';
+  return normalized.replaceAll(/\s+/g, '-');
+};
+
+const defaultDocumentState = {
+  bir: { uploading: false, success: '', error: '' },
+  permit: { uploading: false, success: '', error: '' },
+  logo: { uploading: false, success: '', error: '' }
+};
+
+const defaultJobForm = {
+  position_title: '',
+  job_description: '',
+  nature_of_work: '',
+  place_of_work: '',
+  salary: '',
+  vacancy_count: '',
+  work_experience_months: '',
+  educational_level: '',
+  course_shs_strand: '',
+  license: '',
+  eligibility: '',
+  certification: '',
+  language_dialect: '',
+  other_qualifications: '',
+  accepts_pwd: 'No',
+  pwd_types: {
+    visual: false,
+    hearing: false,
+    speech: false,
+    physical: false,
+    mental: false,
+  },
+  pwd_types_others: '',
+  accepts_ofw: 'No',
+  posting_date: '',
+  valid_until: ''
+};
+
 const EmployerDashboard = () => {
+  const { currentUser, logout } = useAuth();
+  const employerId = currentUser?.id;
+
+  const {
+    notifications: employerNotifications,
+    unreadCount: employerUnreadCount,
+    markAsRead: markEmployerNotificationAsRead,
+    markAllAsRead: markAllEmployerNotificationsAsRead,
+    requestNotificationPermission: requestEmployerNotificationPermission
+  } = useRealtimeNotifications(employerId, 'employer');
+
+  useEffect(() => {
+    requestEmployerNotificationPermission();
+  }, []);
+
+  const [activeTab, setActiveTab] = useState('profile');
+  const [profile, setProfile] = useState(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState('');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    business_name: '',
+    acronym: '',
+    establishment_type: '',
+    tin: '',
+    employer_type: '',
+    total_workforce: '',
+    line_of_business: '',
+    full_address: '',
+    owner_president_name: '',
+    contact_person_name: '',
+    contact_position: '',
+    telephone_number: '',
+    mobile_number: '',
+    fax_number: '',
+    contact_email: ''
+  });
+  const [profileMessage, setProfileMessage] = useState({ type: null, text: '' });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState('pending');
+
+  const isVerified = verificationStatus === 'approved';
+
+  const [documentState, setDocumentState] = useState(defaultDocumentState);
+  const [documentSelection, setDocumentSelection] = useState({
+    bir: null,
+    permit: null,
+    logo: null
+  });
+
+  const [jobForm, setJobForm] = useState(defaultJobForm);
+  const [jobMessage, setJobMessage] = useState({ type: null, text: '' });
+  const [jobSaving, setJobSaving] = useState(false);
+
+  const [pendingJobs, setPendingJobs] = useState([]);
+  const [approvedJobs, setApprovedJobs] = useState([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [jobsError, setJobsError] = useState('');
+  const [jobApplications, setJobApplications] = useState({});
+  const [jobDetailsOpen, setJobDetailsOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [selectedJobStatus, setSelectedJobStatus] = useState(null);
+  const [selectedApplication, setSelectedApplication] = useState(null);
+  const [isProcessingApplication, setIsProcessingApplication] = useState(false);
+  const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
+  const [selectedApplicationProfile, setSelectedApplicationProfile] = useState(null);
+  const [loadingApplicationProfile, setLoadingApplicationProfile] = useState(false);
+
+  useEffect(() => {
+    if (!employerId) return;
+    fetchProfile();
+    fetchJobs();
+  }, [employerId]);
+
+  useEffect(() => {
+    if (!jobDetailsOpen) return undefined;
+
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape') {
+        handleCloseJobDetails();
+      }
+    };
+
+    globalThis.addEventListener('keydown', handleEscKey);
+
+    return () => {
+      globalThis.removeEventListener('keydown', handleEscKey);
+    };
+  }, [jobDetailsOpen]);
+
+  const fetchProfile = async () => {
+    try {
+      setLoadingProfile(true);
+      setProfileError('');
+
+      const { data, error } = await supabase
+        .from('employer_profiles')
+        .select('*')
+        .eq('id', employerId)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      setProfile(data);
+      setProfileForm({
+        business_name: data?.business_name || '',
+        acronym: data?.acronym || '',
+        establishment_type: data?.establishment_type || '',
+        tin: data?.tin || '',
+        employer_type: data?.employer_type || '',
+        total_workforce: data?.total_workforce || '',
+        line_of_business: data?.line_of_business || '',
+        full_address: data?.full_address || '',
+        owner_president_name: data?.owner_president_name || '',
+        contact_person_name: data?.contact_person_name || '',
+        contact_position: data?.contact_position || '',
+        telephone_number: data?.telephone_number || '',
+        mobile_number: data?.mobile_number || '',
+        fax_number: data?.fax_number || '',
+        contact_email: data?.contact_email || ''
+      });
+      setVerificationStatus(data?.verification_status || 'pending');
+    } catch (error) {
+      console.error('Error fetching employer profile:', error);
+      setProfileError(error.message || 'Failed to load profile.');
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  const fetchJobs = async () => {
+    if (!employerId) return;
+    try {
+      setJobsLoading(true);
+      setJobsError('');
+
+      const [pendingResult, approvedResult] = await Promise.all([
+        supabase
+          .from('jobvacancypending')
+          .select('*')
+          .eq('employer_id', employerId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('jobs')
+          .select('*')
+          .eq('employer_id', employerId)
+          .order('created_at', { ascending: false })
+      ]);
+
+      if (pendingResult.error) throw pendingResult.error;
+      if (approvedResult.error) throw approvedResult.error;
+
+      const pendingRows = pendingResult.data || [];
+      const approvedRows = approvedResult.data || [];
+
+      const pending = pendingRows.filter(
+        (job) => (job.status || 'pending').toLowerCase() === 'pending'
+      );
+      const approved = approvedRows.filter((job) => {
+        const status = (job.status || '').toLowerCase();
+        return status === 'approved' || status === 'active';
+      });
+
+      const jobIds = Array.from(
+        new Set(
+          [...pending, ...approved]
+            .map((job) => job.id)
+            .filter(Boolean)
+        )
+      );
+
+      let applicationsByJob = {};
+      if (jobIds.length) {
+        const { data: applicationRows, error: applicationsError } = await supabase
+          .from('applications')
+          .select(
+            `
+              id,
+              status,
+              job_id,
+              jobseeker_id,
+              applied_at,
+              created_at,
+              updated_at,
+              jobseeker_profiles (
+                first_name,
+                last_name,
+                suffix,
+                email,
+                resume_url
+              )
+            `
+          )
+          .in('job_id', jobIds)
+          .order('created_at', { ascending: false });
+
+        if (applicationsError) {
+          console.warn('Unable to load job applications for employer dashboard:', applicationsError.message);
+        } else if (Array.isArray(applicationRows)) {
+          applicationsByJob = applicationRows.reduce((acc, application) => {
+            if (!application.job_id) return acc;
+            if (!acc[application.job_id]) acc[application.job_id] = [];
+            acc[application.job_id].push(application);
+            return acc;
+          }, {});
+        }
+      }
+
+      setPendingJobs(pending);
+      setApprovedJobs(approved);
+      setJobApplications((prev) => {
+        const next = {};
+
+        for (const jobId of Object.keys(applicationsByJob)) {
+          next[jobId] = applicationsByJob[jobId].map((application) => {
+            const statusNormalized = (application.status || '').toLowerCase();
+            const previous = prev[jobId]?.find((item) => item.id === application.id);
+            const wasReferred =
+              Boolean(previous?.was_referred) || statusNormalized === 'referred';
+
+            return {
+              ...application,
+              status: statusNormalized,
+              was_referred: wasReferred
+            };
+          });
+        }
+
+        return next;
+      });
+    } catch (error) {
+      console.error('Error fetching jobs for employer:', error);
+      setJobsError(error.message || 'Failed to load job vacancies.');
+      setJobApplications({});
+    } finally {
+      setJobsLoading(false);
+    }
+  };
+
+  const profileDisplayName = useMemo(() => profile?.business_name || 'Company Profile', [profile]);
+
+  const setDocumentFeedback = (type, updates) => {
+    setDocumentState((prev) => ({
+      ...prev,
+      [type]: { ...prev[type], ...updates }
+    }));
+  };
+
+  const handleProfileInputChange = (field, value) => {
+    setProfileForm((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleSaveProfile = async (event) => {
+    event.preventDefault();
+    if (!employerId) return;
+
+    setProfileSaving(true);
+    setProfileMessage({ type: null, text: '' });
+
+    try {
+      const payload = {
+        ...profileForm,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('employer_profiles')
+        .update(payload)
+        .eq('id', employerId);
+
+      if (error) throw error;
+
+      setProfile((prev) => ({ ...prev, ...payload }));
+      setProfileMessage({ type: 'success', text: 'Profile updated successfully.' });
+      setIsEditingProfile(false);
+    } catch (error) {
+      console.error('Failed to update employer profile:', error);
+      setProfileMessage({
+        type: 'error',
+        text: error.message || 'Unable to save changes right now. Please try again.'
+      });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleRemoveDocument = async (type) => {
+    if (!employerId) return;
+    const config = DOCUMENT_CONFIG[type];
+    if (!config) return;
+
+    setDocumentFeedback(type, { uploading: true, success: '', error: '' });
+
+    try {
+      const { error } = await supabase
+        .from('employer_profiles')
+        .update({ [config.column]: null, updated_at: new Date().toISOString() })
+        .eq('id', employerId);
+
+      if (error) throw error;
+
+      setProfile((prev) => ({
+        ...prev,
+        [config.column]: null
+      }));
+
+      setDocumentSelection((prev) => ({ ...prev, [type]: null }));
+
+      setDocumentFeedback(type, {
+        uploading: false,
+        success: `${config.label} removed successfully.`,
+        error: ''
+      });
+    } catch (error) {
+      console.error(`Failed to remove ${type} document:`, error);
+      setDocumentFeedback(type, {
+        uploading: false,
+        success: '',
+        error: error.message || 'Unable to remove file. Please try again.'
+      });
+    }
+  };
+
+  const handleDocumentSelect = (type, e) => {
+    const file = e.target.files?.[0] || null;
+    setDocumentSelection((prev) => ({ ...prev, [type]: file }));
+    setDocumentFeedback(type, { uploading: false, success: '', error: '' });
+
+    if (type === 'logo' && file) {
+      handleDocumentUpload(type, file);
+    }
+  };
+
+  const handleDocumentUpload = async (type, fileOverride) => {
+    const file = fileOverride || documentSelection[type];
+    if (!file || !employerId) return;
+
+    const config = DOCUMENT_CONFIG[type];
+    if (!config) return;
+
+    setDocumentFeedback(type, { uploading: true, success: '', error: '' });
+
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'pdf';
+    const filePath = `${config.folder}/${employerId}-${Date.now()}.${extension}`;
+
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('files')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      const {
+        data: { publicUrl }
+      } = supabase.storage.from('files').getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from('employer_profiles')
+        .update({ [config.column]: publicUrl, updated_at: new Date().toISOString() })
+        .eq('id', employerId);
+
+      if (updateError) throw updateError;
+
+      setProfile((prev) => ({
+        ...prev,
+        [config.column]: publicUrl
+      }));
+
+      setDocumentSelection((prev) => ({ ...prev, [type]: null }));
+
+      setDocumentFeedback(type, {
+        uploading: false,
+        success: `${config.label} uploaded successfully.`,
+        error: ''
+      });
+    } catch (error) {
+      console.error(`Failed to upload ${type} document:`, error);
+      setDocumentFeedback(type, {
+        uploading: false,
+        success: '',
+        error: error.message || 'Upload failed. Please try again.'
+      });
+    }
+  };
+
+  const handleJobInputChange = (field, value) => {
+    setJobForm((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handlePwdTypeChange = (type, checked) => {
+    setJobForm((prev) => ({
+      ...prev,
+      pwd_types: {
+        ...prev.pwd_types,
+        [type]: checked
+      }
+    }));
+  };
+
+  const handlePwdOtherChange = (value) => {
+    setJobForm((prev) => ({
+      ...prev,
+      pwd_types_others: value
+    }));
+  };
+
+  const handleOpenJobDetails = (job, status) => {
+    setSelectedJob({ ...job });
+    setSelectedJobStatus(status);
+    setSelectedApplication(null);
+    setSelectedApplicationProfile(null);
+    setLoadingApplicationProfile(false);
+    setIsApplicationModalOpen(false);
+    setJobDetailsOpen(true);
+  };
+
+  const handleCloseJobDetails = () => {
+    setSelectedApplication(null);
+    setSelectedApplicationProfile(null);
+    setLoadingApplicationProfile(false);
+    setIsApplicationModalOpen(false);
+    setJobDetailsOpen(false);
+    setSelectedJob(null);
+    setSelectedJobStatus(null);
+  };
+
+  const handleSelectApplication = async (application) => {
+    if (!application?.jobseeker_id) {
+      setSelectedApplication(application);
+      setSelectedApplicationProfile(null);
+      setLoadingApplicationProfile(false);
+      setIsApplicationModalOpen(true);
+      return;
+    }
+
+    setSelectedApplication(application);
+    setLoadingApplicationProfile(true);
+    setSelectedApplicationProfile(null);
+    setIsApplicationModalOpen(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('jobseeker_profiles')
+        .select('*')
+        .eq('id', application.jobseeker_id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setSelectedApplicationProfile(data || null);
+    } catch (error) {
+      console.error('Failed to load jobseeker profile:', error);
+      setSelectedApplicationProfile(null);
+    } finally {
+      setLoadingApplicationProfile(false);
+    }
+  };
+
+  const handleCloseApplicationModal = () => {
+    setIsApplicationModalOpen(false);
+    setSelectedApplication(null);
+    setSelectedApplicationProfile(null);
+    setLoadingApplicationProfile(false);
+  };
+
+  const mutateApplicationStatus = async (applicationId, nextStatus) => {
+    const { error } = await supabase
+      .from('applications')
+      .update({
+        status: nextStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', applicationId);
+
+    if (error) throw error;
+  };
+
+  const handleApplicationDecision = async (application, decision) => {
+    if (!application?.id) return;
+
+    setIsProcessingApplication(true);
+
+    try {
+      let nextStatus = 'referred';
+      if (decision === 'accept') {
+        nextStatus = 'accepted';
+      } else if (decision === 'reject') {
+        nextStatus = 'rejected';
+      }
+
+      await mutateApplicationStatus(application.id, nextStatus);
+
+      setJobApplications((prev) => {
+        const updated = { ...prev };
+
+        // Update the application status within each job entry
+        for (const jobId of Object.keys(updated)) {
+          updated[jobId] = updated[jobId].map((item) =>
+            item.id === application.id
+              ? { ...item, status: nextStatus, updated_at: new Date().toISOString() }
+              : item
+          );
+        }
+
+        return updated;
+      });
+
+      setSelectedApplication((prev) =>
+        prev && prev.id === application.id
+          ? {
+              ...prev,
+              status: nextStatus,
+              updated_at: new Date().toISOString(),
+              was_referred: prev.was_referred || prev.status === 'referred'
+            }
+          : prev
+      );
+    } catch (error) {
+      console.error('Failed to update application status:', error);
+      alert(error.message || 'Unable to update application status right now.');
+    } finally {
+      setIsProcessingApplication(false);
+    }
+  };
+
+  const handleSubmitJob = async (event) => {
+    event.preventDefault();
+    if (!employerId) return;
+
+    setJobSaving(true);
+    setJobMessage({ type: null, text: '' });
+
+    const postingDate = jobForm.posting_date
+      ? jobForm.posting_date
+      : new Date().toISOString().slice(0, 10);
+
+    const validUntil = jobForm.valid_until || null;
+
+    const pwdTypesArray =
+      jobForm.accepts_pwd === 'Yes'
+        ? [
+            ...Object.entries(jobForm.pwd_types)
+              .filter(([key, value]) => value && ['visual', 'hearing', 'speech', 'physical', 'mental'].includes(key))
+              .map(([key]) => key),
+            ...(jobForm.pwd_types_others ? [jobForm.pwd_types_others] : [])
+          ]
+        : [];
+
+    const payload = {
+      employer_id: employerId,
+      position_title: jobForm.position_title,
+      job_description: jobForm.job_description,
+      nature_of_work: jobForm.nature_of_work,
+      place_of_work: jobForm.place_of_work,
+      salary_range: jobForm.salary,
+      vacancy_count: jobForm.vacancy_count ? Number(jobForm.vacancy_count) : 1,
+      work_experience_months: jobForm.work_experience_months
+        ? Number(jobForm.work_experience_months)
+        : null,
+      other_qualifications: jobForm.other_qualifications || null,
+      educational_level: jobForm.educational_level || null,
+      course_shs_strand: jobForm.course_shs_strand || null,
+      license: jobForm.license || null,
+      eligibility: jobForm.eligibility || null,
+      certification: jobForm.certification || null,
+      language_dialect: jobForm.language_dialect || null,
+      accepts_pwd: jobForm.accepts_pwd,
+      pwd_types: pwdTypesArray,
+      pwd_others_specify: jobForm.accepts_pwd === 'Yes' ? jobForm.pwd_types_others || null : null,
+      accepts_ofw: jobForm.accepts_ofw,
+      posting_date: postingDate,
+      valid_until: validUntil,
+      status: 'pending'
+    };
+
+    try {
+      const { error } = await supabase
+        .from('jobvacancypending')
+        .insert([payload]);
+
+      if (error) throw error;
+
+      setJobMessage({ type: 'success', text: 'Job vacancy submitted for review.' });
+      setJobForm(defaultJobForm);
+      setDocumentSelection((prev) => ({ ...prev, bir: null, permit: null }));
+      fetchJobs();
+    } catch (error) {
+      console.error('Failed to submit job vacancy:', error);
+      setJobMessage({
+        type: 'error',
+        text: error.message || 'Unable to submit the job vacancy. Please try again.'
+      });
+    } finally {
+      setJobSaving(false);
+    }
+  };
+
+  const renderProfileSection = () => {
+    if (loadingProfile) {
+      return <div className="loading">Loading company profile…</div>;
+    }
+
+    if (profileError) {
+      return (
+        <div className="error-panel">
+          <div>Failed to load your profile.</div>
+          <div className="error-details">{profileError}</div>
+        </div>
+      );
+    }
+
+    const normalizedStatus = profile?.verification_status || verificationStatus || '';
+    const statusLabel = formatStatusLabel(normalizedStatus, { treatApprovedAsVerified: true });
+
+    return (
+      <form className="profile-form employer-profile-form" onSubmit={handleSaveProfile}>
+        <div className="profile-avatar-banner company-banner">
+          <div className="profile-avatar-wrapper company-logo-wrapper">
+            {profile?.company_logo_url ? (
+              <img src={profile.company_logo_url} alt={`${profileDisplayName} logo`} />
+            ) : (
+              <span className="profile-avatar-initials">
+                {profileDisplayName
+                  .split(' ')
+                  .map((part) => part[0] || '')
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase() || 'EM'}
+              </span>
+            )}
+          </div>
+          <div className="profile-avatar-text">
+            <div className="company-display-name-row">
+              <div className="company-display-name">{profileDisplayName}</div>
+              {statusLabel ? (
+                <span className={`status-badge ${normalizedStatus}`}>
+                  {statusLabel}
+                </span>
+              ) : null}
+            </div>
+            <div className="company-display-email">
+              {profile?.email || currentUser?.email}
+            </div>
+            <div className="profile-avatar-actions">
+              <label className="profile-avatar-upload">
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp"
+                  onChange={(e) => handleDocumentSelect('logo', e)}
+                  disabled={documentState.logo.uploading}
+                />
+                {documentState.logo.uploading ? 'Uploading…' : 'Choose Logo'}
+              </label>
+            </div>
+            {documentState.logo.error ? (
+              <div className="profile-avatar-message error">{documentState.logo.error}</div>
+            ) : null}
+            {documentState.logo.success ? (
+              <div className="profile-avatar-message success">{documentState.logo.success}</div>
+            ) : null}
+          </div>
+        </div>
+
+        <section>
+          <h2>Company Profile</h2>
+          <div className="form-grid">
+            <label className="form-field full">
+              <span>Business Name *</span>
+              <input
+                type="text"
+                value={profileForm.business_name}
+                onChange={(e) => handleProfileInputChange('business_name', e.target.value)}
+                required
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field">
+              <span>Acronym / Abbreviation</span>
+              <input
+                type="text"
+                value={profileForm.acronym}
+                onChange={(e) => handleProfileInputChange('acronym', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field">
+              <span>Establishment Type</span>
+              <select
+                value={profileForm.establishment_type}
+                onChange={(e) =>
+                  handleProfileInputChange('establishment_type', e.target.value)
+                }
+                disabled={!isEditingProfile}
+              >
+                <option value="">Select type</option>
+                <option value="Main Office">Main Office</option>
+                <option value="Branch">Branch</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Tax Identification Number</span>
+              <input
+                type="text"
+                value={profileForm.tin}
+                onChange={(e) => handleProfileInputChange('tin', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field full">
+              <span>Employer Type</span>
+              <select
+                value={profileForm.employer_type}
+                onChange={(e) => handleProfileInputChange('employer_type', e.target.value)}
+                disabled={!isEditingProfile}
+              >
+                <option value="">Select employer type</option>
+                <optgroup label="Public">
+                  <option value="Public - National Government Agency">
+                    National Government Agency
+                  </option>
+                  <option value="Public - Local Government Unit">Local Government Unit</option>
+                  <option value="Public - Government-owned or Controlled Corporation">
+                    Government-owned and Controlled Corporation
+                  </option>
+                  <option value="Public - State/Local University or College">
+                    State / Local University or College
+                  </option>
+                </optgroup>
+                <optgroup label="Private">
+                  <option value="Private - Direct Hire">Direct Hire</option>
+                  <option value="Private - Local Recruitment Agency">
+                    Local Recruitment Agency
+                  </option>
+                  <option value="Private - Overseas Recruitment Agency">
+                    Overseas Recruitment Agency
+                  </option>
+                  <option value="Private - DO 174">D.O. 174</option>
+                </optgroup>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Total Workforce</span>
+              <select
+                value={profileForm.total_workforce}
+                onChange={(e) => handleProfileInputChange('total_workforce', e.target.value)}
+                disabled={!isEditingProfile}
+              >
+                <option value="">Select workforce size</option>
+                <option value="Micro (1-9)">Micro (1-9)</option>
+                <option value="Small (10-99)">Small (10-99)</option>
+                <option value="Medium (100-199)">Medium (100-199)</option>
+                <option value="Large (200 and up)">Large (200 and up)</option>
+              </select>
+            </label>
+            <label className="form-field">
+              <span>Line of Business / Industry</span>
+              <input
+                type="text"
+                value={profileForm.line_of_business}
+                onChange={(e) => handleProfileInputChange('line_of_business', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field full">
+              <span>Full Address</span>
+              <input
+                type="text"
+                value={profileForm.full_address}
+                onChange={(e) => handleProfileInputChange('full_address', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+          </div>
+        </section>
+
+        <section>
+          <h2>Company Contact Details</h2>
+          <div className="form-grid">
+            <label className="form-field">
+              <span>Name of Owner / President (Full Name)</span>
+              <input
+                type="text"
+                value={profileForm.owner_president_name}
+                onChange={(e) =>
+                  handleProfileInputChange('owner_president_name', e.target.value)
+                }
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field">
+              <span>Contact Person (Full Name)</span>
+              <input
+                type="text"
+                value={profileForm.contact_person_name}
+                onChange={(e) =>
+                  handleProfileInputChange('contact_person_name', e.target.value)
+                }
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field">
+              <span>Position</span>
+              <input
+                type="text"
+                value={profileForm.contact_position}
+                onChange={(e) => handleProfileInputChange('contact_position', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field">
+              <span>Telephone Number</span>
+              <input
+                type="text"
+                value={profileForm.telephone_number}
+                onChange={(e) => handleProfileInputChange('telephone_number', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field">
+              <span>Mobile Number</span>
+              <input
+                type="text"
+                value={profileForm.mobile_number}
+                onChange={(e) => handleProfileInputChange('mobile_number', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field">
+              <span>Fax Number</span>
+              <input
+                type="text"
+                value={profileForm.fax_number}
+                onChange={(e) => handleProfileInputChange('fax_number', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+            <label className="form-field">
+              <span>Contact Email Address</span>
+              <input
+                type="email"
+                value={profileForm.contact_email}
+                onChange={(e) => handleProfileInputChange('contact_email', e.target.value)}
+                disabled={!isEditingProfile}
+              />
+            </label>
+          </div>
+        </section>
+
+        {profileMessage.text ? (
+          <div className={`form-message ${profileMessage.type}`}>{profileMessage.text}</div>
+        ) : null}
+
+        <div className="form-actions">
+          <button
+            type="button"
+            className="outline-btn"
+            onClick={() => {
+              if (isEditingProfile) {
+                setIsEditingProfile(false);
+                fetchProfile();
+              } else {
+                setIsEditingProfile(true);
+              }
+            }}
+            disabled={profileSaving}
+          >
+            {isEditingProfile ? 'Cancel' : 'Edit Profile'}
+          </button>
+          <button
+            type="submit"
+            className="primary-btn"
+            disabled={!isEditingProfile || profileSaving}
+          >
+            {profileSaving ? 'Saving…' : 'Save Changes'}
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  const renderDocumentCard = (key) => {
+    const config = DOCUMENT_CONFIG[key];
+    if (!config) return null;
+
+    const state = documentState[key] || { uploading: false, success: '', error: '' };
+
+    return (
+      <div key={key} className="employer-document-card">
+        <h3>{config.label}</h3>
+        <p className="employer-document-helper">{config.helper}</p>
+        <div className="document-upload-row">
+          <label className="employer-document-upload">
+            <input
+              type="file"
+              accept={config.accept}
+              onChange={(e) => handleDocumentSelect(key, e)}
+              disabled={state.uploading}
+            />
+            <span>Choose File</span>
+          </label>
+          <button
+            type="button"
+            className="primary-btn compact"
+            onClick={() => handleDocumentUpload(key)}
+            disabled={!documentSelection[key] || state.uploading}
+          >
+            {state.uploading ? 'Uploading…' : 'Upload'}
+          </button>
+        </div>
+        {documentSelection[key]?.name ? (
+          <div className="selected-file">Selected: {documentSelection[key]?.name}</div>
+        ) : null}
+        {profile?.[config.column] ? (
+          <div className="employer-document-actions">
+            <a
+              className="outline-btn compact"
+              href={profile[config.column]}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              View File
+            </a>
+            <button
+              type="button"
+              className="outline-btn compact danger"
+              onClick={() => handleRemoveDocument(key)}
+              disabled={state.uploading || !profile?.[config.column]}
+            >
+              Remove
+            </button>
+          </div>
+        ) : (
+          <div className="employer-document-placeholder">No file uploaded yet.</div>
+        )}
+        {state.error ? (
+          <div className="employer-document-message error">{state.error}</div>
+        ) : null}
+        {state.success ? (
+          <div className="employer-document-message success">{state.success}</div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderDocumentUpload = () => (
+    <section className="dashboard-panel employer-documents-wrapper">
+      <div className="employer-documents-banner">
+        <h2>Upload Documentary Requirements</h2>
+        <p>
+          Provide official documents to support your account. Approved documents help PESDO
+          validate your legitimacy and speed up job vacancy approvals.
+        </p>
+      </div>
+
+      <div className="employer-document-grid">
+        {['bir', 'permit'].map((key) => renderDocumentCard(key))}
+      </div>
+    </section>
+  );
+
+  const renderSubmitJob = () => (
+    <form className="profile-form" onSubmit={handleSubmitJob}>
+      <section>
+        <h2>Submit a Job Vacancy</h2>
+        <p className="section-subtitle">
+          Provide the role’s details. All approved vacancies appear to jobseekers once reviewed by PESDO.
+        </p>
+        {isVerified ? null : (
+          <div className="form-message warning">
+            Your account must be verified before you can submit job vacancies.
+          </div>
+        )}
+        <h3 className="section-title">Position Details</h3>
+        <div className="form-grid">
+          <label className="form-field">
+            <span>Position Title *</span>
+            <input
+              type="text"
+              value={jobForm.position_title}
+              onChange={(e) => handleJobInputChange('position_title', e.target.value)}
+              required
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>Nature of Work *</span>
+            <select
+              value={jobForm.nature_of_work}
+              onChange={(e) => handleJobInputChange('nature_of_work', e.target.value)}
+              required
+              disabled={!isVerified}
+            >
+              <option value="">Select nature of work</option>
+              <option value="Permanent">Permanent</option>
+              <option value="Contractual">Contractual</option>
+              <option value="Project-Based">Project-Based</option>
+              <option value="Internship">Internship</option>
+              <option value="Part-time">Part-time</option>
+              <option value="Work from home">Work from home</option>
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Place of Work *</span>
+            <input
+              type="text"
+              value={jobForm.place_of_work}
+              onChange={(e) => handleJobInputChange('place_of_work', e.target.value)}
+              required
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>Salary Range</span>
+            <input
+              type="text"
+              value={jobForm.salary}
+              onChange={(e) => handleJobInputChange('salary', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>Vacancy Count</span>
+            <input
+              type="number"
+              min="1"
+              value={jobForm.vacancy_count}
+              onChange={(e) => handleJobInputChange('vacancy_count', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="section-title">Qualification Requirements</h3>
+        <label className="form-field">
+          <span>Job Description *</span>
+          <textarea
+            rows={5}
+            value={jobForm.job_description}
+            onChange={(e) => handleJobInputChange('job_description', e.target.value)}
+            required
+            disabled={!isVerified}
+          />
+        </label>
+
+        <label className="form-field">
+          <span>Other qualifications</span>
+          <textarea
+            rows={3}
+            value={jobForm.other_qualifications}
+            onChange={(e) => handleJobInputChange('other_qualifications', e.target.value)}
+            disabled={!isVerified}
+          />
+        </label>
+
+        <div className="form-grid">
+          <label className="form-field">
+            <span>Work experience (month/s)</span>
+            <input
+              type="number"
+              min="0"
+              value={jobForm.work_experience_months}
+              onChange={(e) =>
+                handleJobInputChange('work_experience_months', e.target.value)
+              }
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>Educational level</span>
+            <select
+              value={jobForm.educational_level}
+              onChange={(e) => handleJobInputChange('educational_level', e.target.value)}
+              disabled={!isVerified}
+            >
+              <option value="">Select education level</option>
+              <option value="Elementary">Elementary</option>
+              <option value="High School">High School</option>
+              <option value="Senior High School">Senior High School</option>
+              <option value="Vocational">Vocational</option>
+              <option value="Bachelor's Degree">Bachelor's Degree</option>
+              <option value="Master's Degree">Master's Degree</option>
+              <option value="Doctorate">Doctorate</option>
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Course / SHS Strand</span>
+            <input
+              type="text"
+              value={jobForm.course_shs_strand}
+              onChange={(e) => handleJobInputChange('course_shs_strand', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>License</span>
+            <input
+              type="text"
+              value={jobForm.license}
+              onChange={(e) => handleJobInputChange('license', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>Eligibility</span>
+            <input
+              type="text"
+              value={jobForm.eligibility}
+              onChange={(e) => handleJobInputChange('eligibility', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>Certification</span>
+            <input
+              type="text"
+              value={jobForm.certification}
+              onChange={(e) => handleJobInputChange('certification', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>Language / dialect spoken</span>
+            <input
+              type="text"
+              value={jobForm.language_dialect}
+              onChange={(e) => handleJobInputChange('language_dialect', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Accessibility & Inclusivity</h2>
+        <div className="form-grid accessibility-grid">
+          <fieldset className="form-field full">
+            <legend>Accepts persons with disabilities (PWD)</legend>
+            <div className="radio-group">
+              <label className="radio-option">
+                <input
+                  type="radio"
+                  name="accepts_pwd"
+                  value="Yes"
+                  checked={jobForm.accepts_pwd === 'Yes'}
+                  onChange={(e) => handleJobInputChange('accepts_pwd', e.target.value)}
+                  disabled={!isVerified}
+                />
+                <span>Yes</span>
+              </label>
+              <label className="radio-option with-suboptions">
+                <input
+                  type="radio"
+                  name="accepts_pwd"
+                  value="No"
+                  checked={jobForm.accepts_pwd === 'No'}
+                  onChange={(e) => handleJobInputChange('accepts_pwd', e.target.value)}
+                  disabled={!isVerified}
+                />
+                <span>No</span>
+              </label>
+            </div>
+
+            {jobForm.accepts_pwd === 'Yes' ? (
+              <div className="checkbox-grid pwd-types-grid">
+                {['visual', 'hearing', 'speech', 'physical', 'mental'].map((type) => (
+                  <label key={type} className="checkbox-field">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(jobForm.pwd_types[type])}
+                      onChange={(e) => handlePwdTypeChange(type, e.target.checked)}
+                      disabled={!isVerified}
+                    />
+                    <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                  </label>
+                ))}
+                <input
+                  type="text"
+                  className="inline-input"
+                  placeholder="Others (please specify)"
+                  value={jobForm.pwd_types_others}
+                  onChange={(e) => handlePwdOtherChange(e.target.value)}
+                  disabled={!isVerified}
+                />
+              </div>
+            ) : null}
+          </fieldset>
+
+          <fieldset className="form-field">
+            <legend>Accepts returning OFWs</legend>
+            <div className="radio-group">
+              <label className="radio-option">
+                <input
+                  type="radio"
+                  name="accepts_ofw"
+                  value="Yes"
+                  checked={jobForm.accepts_ofw === 'Yes'}
+                  onChange={(e) => handleJobInputChange('accepts_ofw', e.target.value)}
+                  disabled={!isVerified}
+                />
+                <span>Yes</span>
+              </label>
+              <label className="radio-option">
+                <input
+                  type="radio"
+                  name="accepts_ofw"
+                  value="No"
+                  checked={jobForm.accepts_ofw === 'No'}
+                  onChange={(e) => handleJobInputChange('accepts_ofw', e.target.value)}
+                  disabled={!isVerified}
+                />
+                <span>No</span>
+              </label>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="section-title">Posting Details</h3>
+        <div className="form-grid">
+          <label className="form-field">
+            <span>Posting Date</span>
+            <input
+              type="date"
+              value={jobForm.posting_date}
+              onChange={(e) => handleJobInputChange('posting_date', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+          <label className="form-field">
+            <span>Valid Until</span>
+            <input
+              type="date"
+              value={jobForm.valid_until}
+              onChange={(e) => handleJobInputChange('valid_until', e.target.value)}
+              disabled={!isVerified}
+            />
+          </label>
+        </div>
+      </section>
+
+      {jobMessage.text ? (
+        <div className={`form-message ${jobMessage.type}`}>{jobMessage.text}</div>
+      ) : null}
+
+      <div className="form-actions">
+        <button type="submit" className="primary-btn" disabled={jobSaving || !isVerified}>
+          {jobSaving ? 'Submitting…' : 'Submit Job Vacancy'}
+        </button>
+      </div>
+    </form>
+  );
+
+  const renderManageJobs = () => {
+    if (jobsLoading) {
+      return <div className="loading">Loading your vacancies…</div>;
+    }
+
+    if (jobsError) {
+      return (
+        <div className="error-panel">
+          <div>Unable to load job vacancies.</div>
+          <div className="error-details">{jobsError}</div>
+        </div>
+      );
+    }
+
+    const hasPending = (pendingJobs || []).length > 0;
+    const hasApproved = (approvedJobs || []).length > 0;
+
+    if (!hasPending && !hasApproved) {
+      return (
+        <div className="empty-state">
+          <div className="empty-icon">📋</div>
+          <h3>No job vacancies found</h3>
+          <p>
+            Submit a job vacancy to have it reviewed by PESDO administrators. Approved jobs will
+            appear here and on the jobseeker dashboard.
+          </p>
+        </div>
+      );
+    }
+
+    const resolveVacancyCount = (job) => {
+      if (typeof job.vacancy_count === 'number') return job.vacancy_count;
+      if (typeof job.total_positions === 'number') return job.total_positions;
+      if (typeof job.vacancies === 'number') return job.vacancies;
+      return 0;
+    };
+
+    const getJobMetrics = (job) => {
+      const jobId = job.id;
+    const jobList = jobId ? jobApplications[jobId] || [] : [];
+    const nonCountingStatuses = new Set(['rejected', 'withdrawn', 'cancelled']);
+    const activeResponses = jobList.filter(
+      (application) => !nonCountingStatuses.has((application.status || '').toLowerCase())
+    );
+    const acceptedApplications = activeResponses.filter(
+      (application) => (application.status || '').toLowerCase() === 'accepted'
+    );
+    const pendingReferredApplications = activeResponses.filter(
+      (application) => (application.status || '').toLowerCase() === 'referred'
+    );
+
+    const applicants = acceptedApplications.filter((application) => !application.was_referred).length;
+    const referred = pendingReferredApplications.length;
+    const vacancy = resolveVacancyCount(job);
+    const responses = acceptedApplications.length;
+    const filled = vacancy > 0 && responses >= vacancy;
+      return {
+        applicants,
+        referred,
+        vacancy,
+        responses,
+        filled
+      };
+    };
+
+    const getLocationLabel = (job) =>
+      job.place_of_work || job.location || job.work_location || 'Not specified';
+
+    const getNatureLabel = (job) =>
+      job.nature_of_work || job.employment_type || job.job_type || 'Not specified';
+
+    const getSalaryLabel = (job) =>
+      job.salary_range || job.salary || job.compensation || 'Not specified';
+
+    const getPostedLabel = (job) =>
+      formatDateLabel(job.created_at || job.posting_date || job.submitted_at);
+
+    const renderJobCard = (job, statusLabel, statusClass) => {
+      const metrics = getJobMetrics(job);
+      const locationLabel = getLocationLabel(job);
+      const natureLabel = getNatureLabel(job);
+      const salaryLabel = getSalaryLabel(job);
+      const postedLabel = getPostedLabel(job);
+      const vacancyLabel = metrics.vacancy || '—';
+      const responsesLabel = `${metrics.responses}/${metrics.vacancy || '—'}`;
+      const statusChipText = metrics.filled ? 'Filled' : 'Open';
+
+      return (
+        <div key={job.id} className="job-card modern">
+          <div className="job-card-header">
+            <h3 className="job-card-title">{job.title || job.position_title || 'Untitled Role'}</h3>
+            <span className={`status-pill ${statusClass}`}>{statusLabel}</span>
+          </div>
+
+          <div className="job-card-summary">
+            <div className="job-meta-grid">
+              <div className="meta-item">
+                <span className="meta-label">📍 Location</span>
+                <span className="meta-value">{locationLabel}</span>
+              </div>
+              <div className="meta-item">
+                <span className="meta-label">💼 Nature</span>
+                <span className="meta-value">{natureLabel}</span>
+              </div>
+              <div className="meta-item">
+                <span className="meta-label">💰 Salary Range</span>
+                <span className="meta-value">{salaryLabel}</span>
+              </div>
+              <div className="meta-item">
+                <span className="meta-label">📄 Vacancies</span>
+                <span className="meta-value">{vacancyLabel}</span>
+              </div>
+              <div className="meta-item">
+                <span className="meta-label">🗓 Posted</span>
+                <span className="meta-value">{postedLabel}</span>
+              </div>
+            </div>
+          </div>
+
+          <p className="job-description modern">
+            {job.description || job.job_description || 'No description provided.'}
+          </p>
+
+          <div className="job-metrics">
+            <div className="metric-card">
+              <span>Vacancies</span>
+              <strong>{vacancyLabel}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Applicants</span>
+              <strong>{metrics.applicants}</strong>
+            </div>
+            <div className="metric-card">
+              <span>Referred</span>
+              <strong>{metrics.referred}</strong>
+            </div>
+            <div className={`fill-chip ${metrics.filled ? 'filled' : 'open'}`}>
+              {statusChipText}
+              {metrics.vacancy ? (
+                <span className="fill-progress">({responsesLabel})</span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="job-card-footer">
+            <span className="job-updated">
+              Updated {formatDateLabel(job.updated_at || job.created_at || job.submitted_at)}
+            </span>
+            <button
+              type="button"
+              className="outline-btn compact"
+              onClick={() => handleOpenJobDetails(job, statusClass)}
+            >
+              View Details
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <>
+        <div className="panel-stack">
+          {hasPending ? (
+            <section className="dashboard-panel">
+              <h2>Pending Review</h2>
+              <div className="cards-row">
+                {pendingJobs.map((job) => renderJobCard(job, 'Pending', 'pending'))}
+              </div>
+            </section>
+          ) : null}
+
+          {hasApproved ? (
+            <section className="dashboard-panel">
+              <h2>Approved Vacancies</h2>
+              <div className="cards-row">
+                {approvedJobs.map((job) => renderJobCard(job, 'Approved', 'approved'))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+
+        {renderJobDetailsModal()}
+        {renderApplicationModal()}
+      </>
+    );
+  };
+
+  const renderJobDetailsModal = () => {
+    if (!jobDetailsOpen || !selectedJob) {
+      return null;
+    }
+
+    const applicationsForSelectedJob = jobApplications[selectedJob.id] || [];
+    const activeApplicants = applicationsForSelectedJob.filter(
+      (application) => !application.was_referred
+    );
+    const referredApplicants = applicationsForSelectedJob.filter(
+      (application) => application.was_referred
+    );
+    return (
+      <div className="employer-modal-overlay">
+        <button
+          type="button"
+          className="employer-modal-backdrop"
+          aria-label="Close job details"
+          onClick={handleCloseJobDetails}
+        />
+        <dialog
+          className="employer-modal"
+          open
+          aria-modal="true"
+          aria-labelledby="employer-modal-title"
+        >
+          <div className="employer-modal-header">
+            <div className="employer-modal-heading">
+              <h3 id="employer-modal-title">
+                {selectedJob.title || selectedJob.position_title || 'Job Vacancy Details'}
+              </h3>
+              <p className="employer-modal-subtitle">
+                {selectedJob.location || selectedJob.place_of_work || '—'}
+              </p>
+            </div>
+            <div className="employer-modal-actions">
+              <span className={`status-pill ${selectedJobStatus || 'pending'}`}>
+                {formatStatusLabel(selectedJobStatus)}
+              </span>
+              <button type="button" className="modal-close-btn" onClick={handleCloseJobDetails}>
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="employer-modal-body">
+            <div className="modal-section">
+              <h4>Position Overview</h4>
+              <div className="modal-meta-grid">
+                <div className="modal-meta-item">
+                  <span>Employment Type</span>
+                  <strong>
+                    {selectedJob.nature_of_work || selectedJob.employment_type || '—'}
+                  </strong>
+                </div>
+                <div className="modal-meta-item">
+                  <span>Vacancy Count</span>
+                  <strong>{selectedJob.vacancy_count || selectedJob.total_positions || '—'}</strong>
+                </div>
+                <div className="modal-meta-item">
+                <span>Salary Range</span>
+                  <strong>{selectedJob.salary_range || selectedJob.salary || '—'}</strong>
+                </div>
+                <div className="modal-meta-item">
+                  <span>Posting Date</span>
+                  <strong>{formatDateLabel(selectedJob.posting_date || selectedJob.created_at)}</strong>
+                </div>
+                <div className="modal-meta-item">
+                  <span>Valid Until</span>
+                  <strong>{formatDateLabel(selectedJob.valid_until)}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-section">
+              <h4>Job Description</h4>
+              <p>{selectedJob.job_description || selectedJob.description || 'No description provided.'}</p>
+            </div>
+
+            <div className="modal-section">
+              <h4>Applications & Referrals</h4>
+              <div className="job-applicants">
+                <div className="applicant-group">
+                  <div className="group-title">Applicants</div>
+                  {activeApplicants.length > 0 ? (
+                    <ul className="applicant-list">
+                      {activeApplicants.map((application) => (
+                        <li key={application.id} className="applicant-item">
+                          <div className="applicant-info">
+                            <span className="applicant-name">
+                              {formatJobseekerName(
+                                application.jobseeker_profiles,
+                                application.jobseeker_profiles?.email
+                              )}
+                            </span>
+                            <span className="applicant-date">
+                              Applied {formatDateLabel(application.applied_at || application.created_at)}
+                            </span>
+                          </div>
+                          <div className="applicant-actions">
+                            <span className={`applicant-status ${getApplicationStatusClass(application.status)}`}>
+                              {formatStatusLabel(application.status)}
+                            </span>
+                            <button
+                              type="button"
+                              className="inline-link"
+                              onClick={() => handleSelectApplication(application)}
+                            >
+                              View
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="applicant-empty">No applicants yet.</p>
+                  )}
+                </div>
+                <div className="applicant-group">
+                  <div className="group-title">Referred by PESDO</div>
+                  {referredApplicants.length > 0 ? (
+                    <ul className="applicant-list">
+                      {referredApplicants.map((application) => (
+                        <li key={application.id} className="applicant-item">
+                          <div className="applicant-info">
+                            <span className="applicant-name">
+                              {formatJobseekerName(
+                                application.jobseeker_profiles,
+                                application.jobseeker_profiles?.email
+                              )}
+                            </span>
+                            <span className="applicant-date">
+                              Referred {formatDateLabel(application.updated_at || application.created_at)}
+                            </span>
+                          </div>
+                          <div className="applicant-actions">
+                            <span className={`applicant-status ${getApplicationStatusClass(application.status)}`}>
+                              {formatStatusLabel(application.status)}
+                            </span>
+                            <button
+                              type="button"
+                              className="inline-link"
+                              onClick={() => handleSelectApplication(application)}
+                            >
+                              View
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="applicant-empty">No referrals yet.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </dialog>
+      </div>
+    );
+  };
+
+  const renderApplicationModal = () => {
+    if (!isApplicationModalOpen || !selectedApplication) {
+      return null;
+    }
+
+    const applicationStatus = (selectedApplication.status || '').toLowerCase();
+    const decisionWindowStatuses = new Set(['pending', 'referred']);
+    const canAccept = decisionWindowStatuses.has(applicationStatus);
+    const canReject = decisionWindowStatuses.has(applicationStatus);
+    const profile = selectedApplicationProfile || selectedApplication.jobseeker_profiles || {};
+    const preferredJobs = Array.isArray(profile.preferred_jobs) ? profile.preferred_jobs.filter(Boolean) : [];
+    const isProfileLoading = loadingApplicationProfile && !selectedApplicationProfile;
+    let employmentStatusLabel = profile.employment_status || '—';
+    if (profile.status === true) {
+      employmentStatusLabel = 'Employed';
+    } else if (profile.status === false) {
+      employmentStatusLabel = 'Unemployed';
+    }
+
+    return (
+      <div className="employer-modal-overlay application">
+        <button
+          type="button"
+          className="employer-modal-backdrop"
+          aria-label="Close applicant details"
+          onClick={handleCloseApplicationModal}
+        />
+        <dialog
+          className="employer-modal applicant-modal"
+          open
+          aria-modal="true"
+          aria-labelledby="applicant-modal-title"
+        >
+          <div className="employer-modal-header applicant">
+            <div className="applicant-avatar">
+              {profile.profile_picture_url ? (
+                <img src={profile.profile_picture_url} alt={`${formatJobseekerName(profile, profile.email)} avatar`} />
+              ) : (
+                <span>
+                  {formatJobseekerName(profile, profile.email)
+                    .split(' ')
+                    .map((part) => part[0]?.toUpperCase())
+                    .join('')
+                    .slice(0, 2)}
+                </span>
+              )}
+            </div>
+            <div className="employer-modal-heading">
+              <h3 id="applicant-modal-title">
+                {formatJobseekerName(profile, profile.email)}
+              </h3>
+              <p className="employer-modal-subtitle">{profile.email || 'No email provided'}</p>
+            </div>
+            <div className="employer-modal-actions">
+              <span className={`applicant-status ${getApplicationStatusClass(selectedApplication.status)}`}>
+                {formatStatusLabel(selectedApplication.status)}
+              </span>
+              <button type="button" className="modal-close-btn" onClick={handleCloseApplicationModal}>
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="employer-modal-body">
+            {isProfileLoading ? (
+              <div className="modal-section">
+                <p className="applicant-empty">Loading applicant profile…</p>
+              </div>
+            ) : (
+              <>
+                <div className="modal-section">
+                  <h4>Profile Summary</h4>
+                  <div className="applicant-info-grid">
+                    <div className="modal-meta-item">
+                      <span>Phone</span>
+                      <strong>{profile.phone || '—'}</strong>
+                    </div>
+                    <div className="modal-meta-item">
+                      <span>Address</span>
+                      <strong>{profile.address || '—'}</strong>
+                    </div>
+                    <div className="modal-meta-item">
+                      <span>Gender</span>
+                      <strong>{profile.gender || '—'}</strong>
+                    </div>
+                    <div className="modal-meta-item">
+                      <span>Civil Status</span>
+                      <strong>{profile.civil_status || '—'}</strong>
+                    </div>
+                    <div className="modal-meta-item">
+                      <span>Education</span>
+                      <strong>{profile.education || '—'}</strong>
+                    </div>
+                    <div className="modal-meta-item">
+                      <span>Employment Status</span>
+                      <strong>{employmentStatusLabel}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {preferredJobs.length ? (
+                  <div className="modal-section">
+                    <h4>Preferred Jobs</h4>
+                    <ul className="preferred-job-list">
+                      {preferredJobs.map((job, index) => (
+                        <li key={`${job}-${index}`}>{job}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+
+                {profile.bio ? (
+                  <div className="modal-section">
+                    <h4>Summary</h4>
+                    <p>{profile.bio}</p>
+                  </div>
+                ) : null}
+
+                <div className="modal-section">
+                  <h4>Resume</h4>
+                  {profile.resume_url ? (
+                    <a
+                      href={profile.resume_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-link"
+                    >
+                      View Resume
+                    </a>
+                  ) : (
+                    <p className="applicant-empty">No resume uploaded.</p>
+                  )}
+                </div>
+              </>
+            )}
+
+            <div className="applicant-action-row">
+              <button
+                type="button"
+                className="outline-btn compact danger"
+                onClick={() => handleApplicationDecision(selectedApplication, 'reject')}
+                disabled={isProcessingApplication || !canReject}
+              >
+                Reject
+              </button>
+              <button
+                type="button"
+                className="primary-btn compact"
+                onClick={() => handleApplicationDecision(selectedApplication, 'accept')}
+                disabled={isProcessingApplication || !canAccept}
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </dialog>
+      </div>
+    );
+  };
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'profile':
+        return renderProfileSection();
+      case 'documents':
+        return renderDocumentUpload();
+      case 'submit':
+        return renderSubmitJob();
+      case 'manage':
+        return renderManageJobs();
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div>
-      <h2>Employer Dashboard</h2>
+    <div className="js-dashboard employer-dashboard">
+      <aside className="js-sidebar">
+        <div className="sidebar-header">
+          <div className="brand-mark">Employer Dashboard</div>
+          <div className="user-snapshot">
+            <div className="user-name">{profileDisplayName}</div>
+            <div className="user-email">
+              {currentUser?.email || profile?.email || '—'}
+            </div>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav">
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
+              onClick={() => setActiveTab(item.key)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="sidebar-footer">
+          <button type="button" className="outline-btn full" onClick={() => logout()}>
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <main className="js-main">
+        <header className="main-header">
+          <div className="header-top">
+            <div className="header-info">
+              <h1>
+                {activeTab === 'profile' && 'Company Profile'}
+                {activeTab === 'documents' && 'Documentary Requirements'}
+                {activeTab === 'submit' && 'Submit a Job Vacancy'}
+                {activeTab === 'manage' && 'Manage Job Vacancies'}
+              </h1>
+              <p className="muted">
+                {activeTab === 'profile' &&
+                  'Review and update your organization’s information so job postings stay accurate.'}
+                {activeTab === 'documents' &&
+                  'Upload official requirements to help PESDO validate and approve your job vacancies faster.'}
+                {activeTab === 'submit' &&
+                  'Provide job vacancy details for PESDO review before they appear to jobseekers.'}
+                {activeTab === 'manage' &&
+                  'Track the status of your submitted vacancies and review approved postings.'}
+              </p>
+            </div>
+            <div className="header-actions">
+              <NotificationButton
+                notifications={employerNotifications}
+                unreadCount={employerUnreadCount}
+                onMarkAsRead={markEmployerNotificationAsRead}
+                onMarkAllAsRead={markAllEmployerNotificationsAsRead}
+              />
+            </div>
+          </div>
+        </header>
+
+        <div className="panel-stack">{renderContent()}</div>
+      </main>
     </div>
   );
 };

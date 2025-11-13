@@ -5,7 +5,7 @@ import Logo_pesdo from '../assets/Logo_pesdo.png';
 import { Link } from 'react-router-dom';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
-import { getStats, firebaseDB } from '../services/firebaseService';
+import { supabase } from '../supabase';
 
 const LandingPage = () => {
     const [showScroll, setShowScroll] = useState(false);
@@ -41,15 +41,25 @@ const LandingPage = () => {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Fetch data from Firebase
+    // Fetch data from Supabase
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
-                const [statsData, jobsData] = await Promise.all([
-                    getStats(),
-                    firebaseDB.jobs.getRecentJobs(3)
-                ]);
+                // Get stats and recent jobs
+                const { data: users } = await supabase.from('jobseeker_profiles').select('id');
+                const { data: jobs } = await supabase.from('jobs').select('id');
+                const { data: jobsData } = await supabase
+                  .from('jobs')
+                  .select('*')
+                  .order('created_at', { ascending: false })
+                  .limit(3);
+                
+                const statsData = {
+                  jobseekers: users?.length || 0,
+                  employers: 0,
+                  openJobs: jobs?.length || 0
+                };
                 
                 setStats(statsData);
                 setRecentJobs(jobsData);
@@ -82,7 +92,32 @@ const LandingPage = () => {
                 </div>
                 <nav aria-label="Primary navigation">
                     <Link className="btn" to="/register">Register</Link>
-                    <Link className="btn btn-outline" to="/login">Login</Link>
+                    <div className="login-dropdown">
+                        <button className="btn btn-outline login-dropdown-btn">Login</button>
+                        <div className="login-dropdown-content">
+                            <Link to="/login/jobseeker" className="login-option">
+                                <span className="login-icon">👤</span>
+                                <span className="login-text">
+                                    <strong>Jobseeker Login</strong>
+                                    <small>Find your dream job</small>
+                                </span>
+                            </Link>
+                            <Link to="/login/employer" className="login-option">
+                                <span className="login-icon">🏢</span>
+                                <span className="login-text">
+                                    <strong>Employer Login</strong>
+                                    <small>Manage your business</small>
+                                </span>
+                            </Link>
+                            <Link to="/admin" className="login-option admin-option">
+                                <span className="login-icon">⚙️</span>
+                                <span className="login-text">
+                                    <strong>Admin Login</strong>
+                                    <small>System administration</small>
+                                </span>
+                            </Link>
+                        </div>
+                    </div>
                 </nav>
             </header>
 
@@ -100,7 +135,16 @@ const LandingPage = () => {
                         <p>Connecting job seekers with the right opportunities.</p>
                         <div className="hero-cta">
                             <Link className="btn btn-accent" to="/register" aria-label="Register as a new user">Get Started</Link>
-                            <Link className="btn btn-light" to="/login" aria-label="Login to your account">I already have an account</Link>
+                            <div className="login-options">
+                                <Link className="btn btn-light" to="/login/jobseeker" aria-label="Login as jobseeker">
+                                    <span className="btn-icon">👤</span>
+                                    <span className="btn-text">Jobseeker Login</span>
+                                </Link>
+                                <Link className="btn btn-light" to="/login/employer" aria-label="Login as employer">
+                                    <span className="btn-icon">🏢</span>
+                                    <span className="btn-text">Employer Login</span>
+                                </Link>
+                            </div>
                         </div>
                     </div>
                     <a className="scroll-down" href="#how-it-works" aria-label="Scroll to How it works">↓</a>
@@ -213,7 +257,16 @@ const LandingPage = () => {
                     <p>Create your account or log in to continue.</p>
                     <div className="final-cta-actions">
                         <Link className="btn btn-accent" to="/register">Create free account</Link>
-                        <Link className="btn btn-outline-dark" to="/login">Login</Link>
+                        <div className="final-login-options">
+                            <Link className="btn btn-outline-dark" to="/login/jobseeker">
+                                <span className="btn-icon">👤</span>
+                                <span className="btn-text">Jobseeker Login</span>
+                            </Link>
+                            <Link className="btn btn-outline-dark" to="/login/employer">
+                                <span className="btn-icon">🏢</span>
+                                <span className="btn-text">Employer Login</span>
+                            </Link>
+                        </div>
                     </div>
                 </section>
             </main>

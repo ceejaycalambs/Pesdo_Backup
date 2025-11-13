@@ -138,10 +138,3 @@ const DatabaseManager = () => {
 export default DatabaseManager;
 
 
-
-
-
-
-
-
-
