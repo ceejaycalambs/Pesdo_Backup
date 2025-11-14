@@ -14,6 +14,8 @@ import UserManagement from './pages/Admin/UserManagement';
 import JobManagementSimplified from './pages/Admin/JobManagementSimplified';
 import EmployerVerificationSimple from './pages/Admin/EmployerVerificationSimple';
 import AdminAnalytics from './pages/Admin/AdminAnalytics';
+import SuperAdminLogs from './pages/Admin/SuperAdminLogs';
+import AdminManagement from './pages/Admin/AdminManagement';
 import AuthCallback from './pages/AuthCallback';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import './styles/responsive.css';
@@ -38,6 +40,8 @@ function App() {
                     <Route path="/admin/jobs" element={<JobManagementSimplified />} />
                     <Route path="/admin/verification" element={<EmployerVerificationSimple />} />
                     <Route path="/admin/analytics" element={<AdminAnalytics />} />
+                    <Route path="/admin/logs" element={<SuperAdminLogs />} />
+                    <Route path="/admin/settings" element={<AdminManagement />} />
                     <Route path="/auth/callback" element={<AuthCallback />} />
                 </Routes>
             </AuthProvider>

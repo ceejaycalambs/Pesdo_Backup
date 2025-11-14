@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabase.js';
 import './AdminDashboard.css';
 import './AdminAnalytics.css';
@@ -22,9 +23,9 @@ const DOUGHNUT_COLORS = ['#2563eb', '#f97316', '#10b981', '#6366f1'];
 
 const AdminAnalytics = () => {
   const navigate = useNavigate();
+  const { currentUser: authUser, userData } = useAuth();
   const [loading, setLoading] = useState(true);
   const [adminEmail, setAdminEmail] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
   const [error, setError] = useState('');
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [analyticsTab, setAnalyticsTab] = useState('analytics');
@@ -40,8 +41,34 @@ const AdminAnalytics = () => {
   const [employerDateRange, setEmployerDateRange] = useState({ from: '', to: '' });
   const [referralDateRange, setReferralDateRange] = useState({ from: '', to: '' });
   const [placementDateRange, setPlacementDateRange] = useState({ from: '', to: '' });
+  const [chartPeriod, setChartPeriod] = useState('all'); // 'all', 'monthly', 'quarterly', 'yearly'
 
   const analyticsSummary = analyticsData.analytics || [];
+
+  // Helper function to filter data by period
+  const filterByPeriod = (dateString) => {
+    if (!dateString || chartPeriod === 'all') return true;
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    
+    switch (chartPeriod) {
+      case 'monthly': {
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        return date >= monthAgo;
+      }
+      case 'quarterly': {
+        const quarterAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        return date >= quarterAgo;
+      }
+      case 'yearly': {
+        const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        return date >= yearAgo;
+      }
+      default:
+        return true;
+    }
+  };
 
   const barChartData = useMemo(() => {
     if (!analyticsSummary.length) return null;
@@ -369,6 +396,80 @@ const AdminAnalytics = () => {
     };
   }, [employerData]);
 
+  // Top 10 charts
+  const topPreferredJobsChartData = useMemo(() => {
+    const jobCounts = {};
+    
+    jobseekerData.forEach(seeker => {
+      // Filter by period based on registration date
+      if (!filterByPeriod(seeker.registeredAt)) return;
+      
+      const preferredJobs = seeker.preferredJobs || [];
+      if (Array.isArray(preferredJobs)) {
+        preferredJobs.forEach(job => {
+          if (job && job.trim()) {
+            const jobName = job.trim();
+            jobCounts[jobName] = (jobCounts[jobName] || 0) + 1;
+          }
+        });
+      }
+    });
+
+    // Sort by count and get top 10
+    const sortedJobs = Object.entries(jobCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const labels = sortedJobs.map(([job]) => job);
+    const data = sortedJobs.map(([, count]) => count);
+
+    return {
+      labels,
+      datasets: [{
+        label: 'Count',
+        data,
+        backgroundColor: BAR_COLORS.slice(0, labels.length),
+        borderRadius: 8,
+        maxBarThickness: 60
+      }]
+    };
+  }, [jobseekerData, chartPeriod]);
+
+  const vacancyData = analyticsData.vacancies || [];
+
+  const topJobPositionsChartData = useMemo(() => {
+    const positionCounts = {};
+    
+    vacancyData.forEach(vacancy => {
+      // Filter by period based on posted date
+      if (!filterByPeriod(vacancy.postedAt)) return;
+      
+      const position = vacancy.jobPosition || 'Untitled Vacancy';
+      if (position && position !== '—') {
+        positionCounts[position] = (positionCounts[position] || 0) + 1;
+      }
+    });
+
+    // Sort by count and get top 10
+    const sortedPositions = Object.entries(positionCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+
+    const labels = sortedPositions.map(([position]) => position);
+    const data = sortedPositions.map(([, count]) => count);
+
+    return {
+      labels,
+      datasets: [{
+        label: 'Count',
+        data,
+        backgroundColor: BAR_COLORS.slice(0, labels.length),
+        borderRadius: 8,
+        maxBarThickness: 60
+      }]
+    };
+  }, [vacancyData, chartPeriod]);
+
   const demographicsBarChartOptions = useMemo(
     () => ({
       responsive: true,
@@ -423,49 +524,93 @@ const AdminAnalytics = () => {
 
   useEffect(() => {
     checkAdminAuth();
-  }, []);
+  }, [authUser, userData]);
 
   useEffect(() => {
-    if (adminEmail && currentUser) {
+    if (adminEmail && authUser) {
       fetchAnalyticsData();
     }
-  }, [adminEmail, currentUser]);
+  }, [adminEmail, authUser]);
+
+  // Prevent trackpad gesture scrolling
+  useEffect(() => {
+    const preventTrackpadGestures = (e) => {
+      // Prevent wheel events with ctrl/meta key (trackpad pinch/zoom gestures)
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        return false;
+      }
+      // Prevent horizontal scrolling from trackpad gestures
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    const container = document.querySelector('.admin-analytics-page');
+    if (container) {
+      container.addEventListener('wheel', preventTrackpadGestures, { passive: false });
+      container.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      container.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener('wheel', preventTrackpadGestures);
+      }
+    };
+  }, []);
 
   const checkAdminAuth = async () => {
-    const authenticated = localStorage.getItem('admin_authenticated');
-    const loginTime = localStorage.getItem('admin_login_time');
-    const email = localStorage.getItem('admin_email');
-
-    if (authenticated === 'true' && loginTime && email) {
-      const now = Date.now();
-      const loginTimestamp = Number.parseInt(loginTime);
-      const hoursSinceLogin = (now - loginTimestamp) / (1000 * 60 * 60);
-
-      if (hoursSinceLogin < 24) {
-        setAdminEmail(email);
-
-        try {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: 'admin@pesdo.com',
-            password: 'admin123'
-          });
-
-          if (error) {
-            console.error('Admin Supabase auth error:', error);
-            console.log('Please run the create_admin_user.sql script in Supabase SQL Editor first');
-          } else {
-            setCurrentUser(data.user);
-          }
-        } catch (authError) {
-          console.error('Admin auth error:', authError);
+    // Check if user is authenticated via AuthContext
+    if (!authUser) {
+      // Fallback to localStorage check for backward compatibility
+      const authenticated = localStorage.getItem('admin_authenticated');
+      const loginTime = localStorage.getItem('admin_login_time');
+      const email = localStorage.getItem('admin_email');
+      
+      if (authenticated === 'true' && loginTime && email) {
+        const now = Date.now();
+        const loginTimestamp = Number.parseInt(loginTime);
+        const hoursSinceLogin = (now - loginTimestamp) / (1000 * 60 * 60);
+        
+        if (hoursSinceLogin < 24) {
+          setAdminEmail(email);
+          setLoading(false);
+          return;
+        } else {
+          handleLogout();
+          return;
         }
-
-        setLoading(false);
       } else {
-        handleLogout();
+        navigate('/admin');
+        return;
       }
+    }
+
+    // User is authenticated via AuthContext
+    if (authUser && userData) {
+      // Check if user is an admin
+      const userType = userData.usertype || userData.userType;
+      if (userType !== 'admin') {
+        // Not an admin, redirect to login
+        navigate('/admin');
+        return;
+      }
+
+      setAdminEmail(authUser.email || '');
+      setLoading(false);
     } else {
-      navigate('/admin');
+      // Wait for auth to load
+      setLoading(true);
     }
   };
 
@@ -475,7 +620,7 @@ const AdminAnalytics = () => {
 
       const { data: jobseekerProfiles, error: jobseekerError } = await supabase
         .from('jobseeker_profiles')
-        .select('id, first_name, last_name, suffix, email, phone, address, gender, civil_status, education, status, age, created_at');
+        .select('id, first_name, last_name, suffix, email, phone, address, gender, civil_status, education, status, age, preferred_jobs, created_at');
 
       if (jobseekerError) {
         console.error('Error fetching jobseeker profiles:', jobseekerError);
@@ -532,6 +677,7 @@ const AdminAnalytics = () => {
         education: profile.education || '—',
         employmentStatus: profile.status === true ? 'Currently Employed' : 'Looking for Work',
         age: profile.age || null,
+        preferredJobs: profile.preferred_jobs || [],
         registeredAt: profile.created_at
       }));
 
@@ -671,7 +817,6 @@ const AdminAnalytics = () => {
       localStorage.removeItem('admin_login_time');
       localStorage.removeItem('admin_email');
       await supabase.auth.signOut();
-      setCurrentUser(null);
       setAdminEmail('');
       navigate('/admin');
     } catch (err) {
@@ -963,8 +1108,22 @@ const AdminAnalytics = () => {
     if (analyticsTab === 'analytics') {
       return (
         <div className="analytics-analytics-view">
-          {barChartData && doughnutData ? (
-            <div className="analytics-charts">
+          <div className="chart-period-filter">
+            <label htmlFor="chart-period-select">Filter by Period:</label>
+            <select
+              id="chart-period-select"
+              value={chartPeriod}
+              onChange={(e) => setChartPeriod(e.target.value)}
+              className="chart-period-select"
+            >
+              <option value="all">All Time</option>
+              <option value="monthly">Monthly (Last 30 days)</option>
+              <option value="quarterly">Quarterly (Last 90 days)</option>
+              <option value="yearly">Yearly (Last 365 days)</option>
+            </select>
+          </div>
+          <div className="analytics-charts">
+            {barChartData && (
               <div className="chart-card">
                 <div className="chart-card-header">
                   <h3>System Totals</h3>
@@ -974,6 +1133,8 @@ const AdminAnalytics = () => {
                   <Bar data={barChartData} options={barChartOptions} />
                 </div>
               </div>
+            )}
+            {doughnutData && (
               <div className="chart-card">
                 <div className="chart-card-header">
                   <h3>Engagement Snapshot</h3>
@@ -983,8 +1144,30 @@ const AdminAnalytics = () => {
                   <Doughnut data={doughnutData} options={doughnutOptions} />
                 </div>
               </div>
-            </div>
-          ) : null}
+            )}
+            {topPreferredJobsChartData && topPreferredJobsChartData.labels.length > 0 && (
+              <div className="chart-card">
+                <div className="chart-card-header">
+                  <h3>Top 10 Preferred Jobs</h3>
+                  <p>Most popular job preferences from jobseekers.</p>
+                </div>
+                <div className="chart-canvas">
+                  <Bar data={topPreferredJobsChartData} options={demographicsBarChartOptions} />
+                </div>
+              </div>
+            )}
+            {topJobPositionsChartData && topJobPositionsChartData.labels.length > 0 && (
+              <div className="chart-card">
+                <div className="chart-card-header">
+                  <h3>Top 10 Job Positions</h3>
+                  <p>Most posted job positions by employers.</p>
+                </div>
+                <div className="chart-canvas">
+                  <Bar data={topJobPositionsChartData} options={demographicsBarChartOptions} />
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="jobseeker-demographics-section">
             <h2 className="demographics-section-title">Jobseeker Demographics</h2>
@@ -1155,9 +1338,6 @@ const AdminAnalytics = () => {
             <button onClick={() => navigate('/admin/dashboard')} className="analytics-back-btn">
               ← Back to Dashboard
             </button>
-            <button onClick={handleLogout} className="logout-btn">
-              🚪 Logout
-            </button>
           </div>
         </div>
       </header>
@@ -1183,7 +1363,7 @@ const AdminAnalytics = () => {
                 onClick={() => setAnalyticsTab(key)}
               >
                 {analyticsConfig[key].label}
-                <span className="analytics-tab-count">{analyticsCounts[key]}</span>
+                {key !== 'analytics' && <span className="analytics-tab-count">{analyticsCounts[key]}</span>}
               </button>
             ))}
           </div>

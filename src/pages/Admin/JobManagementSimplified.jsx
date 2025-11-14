@@ -4,6 +4,7 @@ import { supabase } from '../../supabase.js';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
 import NotificationButton from '../../components/NotificationButton';
+import { logActivity } from '../../utils/activityLogger';
 import './JobManagement.css';
 
 const JobManagementSimplified = () => {
@@ -32,6 +33,7 @@ const JobManagementSimplified = () => {
   const [referSearchTerm, setReferSearchTerm] = useState('');
   const [referStatusFilter, setReferStatusFilter] = useState('all');
   const [referNameSearch, setReferNameSearch] = useState('');
+  const [adminRole, setAdminRole] = useState(null); // 'admin' or 'super_admin'
 
   // Realtime notifications
   const {
@@ -183,6 +185,66 @@ const JobManagementSimplified = () => {
     requestNotificationPermission();
   }, []);
 
+  // Prevent trackpad gesture scrolling
+  useEffect(() => {
+    const preventTrackpadGestures = (e) => {
+      // Prevent wheel events with ctrl/meta key (trackpad pinch/zoom gestures)
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        return false;
+      }
+      // Prevent horizontal scrolling from trackpad gestures
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    const container = document.querySelector('.job-management');
+    if (container) {
+      container.addEventListener('wheel', preventTrackpadGestures, { passive: false });
+      container.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      container.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener('wheel', preventTrackpadGestures);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // Always fetch admin role from database to ensure it's correct for the current user
+    // Don't trust localStorage as it might be stale or from a different user
+    if (currentUser?.id) {
+      supabase
+        .from('admin_profiles')
+        .select('role')
+        .eq('id', currentUser.id)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            const role = data.role || 'admin';
+            setAdminRole(role);
+            // Only update localStorage if it matches the current user's actual role
+            localStorage.setItem('admin_role', role);
+          } else {
+            setAdminRole('admin');
+            localStorage.setItem('admin_role', 'admin');
+          }
+        });
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     fetchJobs();
     fetchApplications();
@@ -310,6 +372,30 @@ const JobManagementSimplified = () => {
         // RPC function succeeded
         const action = data?.action || 'created';
         showNotification('success', `✅ Jobseeker referred successfully! (${action === 'updated' ? 'Updated existing application' : 'Created new application'})`);
+      }
+
+      // Log activity
+      if (currentUser?.id) {
+        // Get jobseeker name for logging
+        const jobseeker = jobseekers.find(js => js.id === jobseekerId);
+        const jobseekerName = jobseeker 
+          ? `${jobseeker.first_name || ''} ${jobseeker.last_name || ''}`.trim() || jobseeker.email
+          : 'Unknown';
+
+        await logActivity({
+          userId: currentUser.id,
+          userType: adminRole === 'super_admin' ? 'super_admin' : 'admin',
+          actionType: 'jobseeker_referred',
+          actionDescription: `Referred jobseeker ${jobseekerName} to job: ${selectedJobForReferral.position_title || selectedJobForReferral.title}`,
+          entityType: 'application',
+          entityId: null, // Application ID might not be available immediately
+          metadata: {
+            jobseekerId: jobseekerId,
+            jobseekerName: jobseekerName,
+            jobId: selectedJobForReferral.id,
+            jobTitle: selectedJobForReferral.position_title || selectedJobForReferral.title
+          }
+        });
       }
 
       // Refresh applications and jobseekers
@@ -555,9 +641,8 @@ const JobManagementSimplified = () => {
       console.log('✅ Approving job:', job);
 
       const pwdTypes = sanitizeArray(job.pwd_types);
-      const postingDate =
-        job.posting_date ||
-        (job.created_at ? new Date(job.created_at).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
+      // Set posting_date to current date when admin approves (this is when the job is actually posted)
+      const postingDate = new Date().toISOString().slice(0, 10);
 
       const approvedJobData = {
         id: job.id,
@@ -580,6 +665,7 @@ const JobManagementSimplified = () => {
         pwd_others_specify: sanitizeText(job.pwd_others_specify),
         accepts_ofw: sanitizeText(job.accepts_ofw),
         posting_date: postingDate,
+        valid_from: job.valid_from || null,
         valid_until: job.valid_until || null,
         position_title: sanitizeText(job.position_title),
         job_description: sanitizeText(job.job_description) || sanitizeText(job.description),
@@ -629,6 +715,23 @@ const JobManagementSimplified = () => {
         console.error('Error creating notification:', notificationError);
       } else {
         console.log('✅ Notification created:', notificationData);
+      }
+
+      // Log activity
+      if (currentUser?.id) {
+        await logActivity({
+          userId: currentUser.id,
+          userType: adminRole === 'super_admin' ? 'super_admin' : 'admin',
+          actionType: 'job_approved',
+          actionDescription: `Approved job vacancy: ${job.position_title}`,
+          entityType: 'job',
+          entityId: insertData?.id || job.id,
+          metadata: {
+            jobTitle: job.position_title,
+            employerId: job.employer_id,
+            vacancyCount: job.vacancy_count
+          }
+        });
       }
 
       // Refresh jobs

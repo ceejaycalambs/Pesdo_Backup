@@ -106,7 +106,7 @@ const defaultJobForm = {
   },
   pwd_types_others: '',
   accepts_ofw: 'No',
-  posting_date: '',
+  valid_from: '',
   valid_until: ''
 };
 
@@ -685,10 +685,7 @@ const EmployerDashboard = () => {
     setJobSaving(true);
     setJobMessage({ type: null, text: '' });
 
-    const postingDate = jobForm.posting_date
-      ? jobForm.posting_date
-      : new Date().toISOString().slice(0, 10);
-
+    const validFrom = jobForm.valid_from || null;
     const validUntil = jobForm.valid_until || null;
 
     const pwdTypesArray =
@@ -723,7 +720,8 @@ const EmployerDashboard = () => {
       pwd_types: pwdTypesArray,
       pwd_others_specify: jobForm.accepts_pwd === 'Yes' ? jobForm.pwd_types_others || null : null,
       accepts_ofw: jobForm.accepts_ofw,
-      posting_date: postingDate,
+      posting_date: new Date().toISOString().slice(0, 10), // Set to current date for submission (admin will set actual posting date on approval)
+      valid_from: validFrom,
       valid_until: validUntil,
       status: 'pending'
     };
@@ -1376,11 +1374,11 @@ const EmployerDashboard = () => {
         <h3 className="section-title">Posting Details</h3>
         <div className="form-grid">
           <label className="form-field">
-            <span>Posting Date</span>
+            <span>Valid From</span>
             <input
               type="date"
-              value={jobForm.posting_date}
-              onChange={(e) => handleJobInputChange('posting_date', e.target.value)}
+              value={jobForm.valid_from}
+              onChange={(e) => handleJobInputChange('valid_from', e.target.value)}
               disabled={!isVerified}
             />
           </label>

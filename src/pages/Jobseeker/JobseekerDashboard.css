@@ -500,6 +500,7 @@
 .application-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
   margin-top: 4px;
 }
 
@@ -507,6 +508,27 @@
   padding: 10px 18px;
   border-radius: 999px;
   font-weight: 600;
+}
+
+.application-actions .cancel-btn {
+  padding: 10px 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  background: transparent;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.application-actions .cancel-btn:hover {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.6);
+  color: #b91c1c;
+}
+
+.application-actions .cancel-btn:active {
+  transform: scale(0.98);
 }
 
 .referral-banner {
@@ -1115,14 +1137,36 @@
   border-top: 1px solid rgba(148, 163, 184, 0.24);
   background: #f8fafc;
   display: flex;
-  justify-content: flex-end;
   gap: 12px;
+  justify-content: flex-end;
 }
 
 .job-modal-footer .outline-btn {
   min-width: 120px;
   border-color: rgba(148, 163, 184, 0.5);
   color: #1f2937;
+}
+
+.job-modal-footer .cancel-btn {
+  min-width: 140px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  background: transparent;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.job-modal-footer .cancel-btn:hover {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.6);
+  color: #b91c1c;
+}
+
+.job-modal-footer .cancel-btn:active {
+  transform: scale(0.98);
 }
 
 .job-modal-footer .primary-btn {

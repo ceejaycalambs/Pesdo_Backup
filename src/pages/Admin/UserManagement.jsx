@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../supabase.js';
 import './UserManagement.css';
 
 const UserManagement = () => {
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('jobseekers');
   const [jobseekers, setJobseekers] = useState([]);
   const [employers, setEmployers] = useState([]);
@@ -15,7 +17,49 @@ const UserManagement = () => {
   const [sortBy, setSortBy] = useState('newest');
 
   useEffect(() => {
+    // Check URL parameter for tab
+    const tabParam = searchParams.get('tab');
+    if (tabParam === 'employers') {
+      setActiveTab('employers');
+    }
     fetchUsers();
+  }, [searchParams]);
+
+  // Prevent trackpad gesture scrolling
+  useEffect(() => {
+    const preventTrackpadGestures = (e) => {
+      // Prevent wheel events with ctrl/meta key (trackpad pinch/zoom gestures)
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        return false;
+      }
+      // Prevent horizontal scrolling from trackpad gestures
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    const container = document.querySelector('.user-management');
+    if (container) {
+      container.addEventListener('wheel', preventTrackpadGestures, { passive: false });
+      container.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      container.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener('wheel', preventTrackpadGestures);
+      }
+    };
   }, []);
 
   const fetchUsers = async () => {

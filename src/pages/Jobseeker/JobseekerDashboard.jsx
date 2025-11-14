@@ -376,6 +376,7 @@ const JobseekerDashboard = () => {
             : [],
           pwd_others_specify: job.pwd_others_specify || null,
           accepts_ofw: job.accepts_ofw || null,
+          valid_from: job.valid_from || null,
           valid_until: job.valid_until || null,
           posting_date: job.posting_date || null,
           place_of_work: job.place_of_work || null
@@ -464,6 +465,7 @@ const JobseekerDashboard = () => {
               job.vacancies ??
               null,
             postedAt: job.postedAt || job.created_at || job.posting_date || null,
+            validFrom: job.valid_from || job.validFrom || null,
             validUntil: job.valid_until || job.validUntil || null,
             employer_id: job.employer_id || null,
             nature_of_work: job.nature_of_work || null,
@@ -524,11 +526,36 @@ const JobseekerDashboard = () => {
     return appliedJobs.some((application) => application.job.id === selectedJob.id);
   }, [selectedJob, appliedJobs]);
 
+  const selectedJobApplication = useMemo(() => {
+    if (!selectedJob) return null;
+    return appliedJobs.find((application) => application.job.id === selectedJob.id) || null;
+  }, [selectedJob, appliedJobs]);
+
+  const canCancelSelectedJobApplication = useMemo(() => {
+    if (!selectedJobApplication) return false;
+    const status = selectedJobApplication.status?.toLowerCase();
+    return status === 'pending' || status === 'in_review';
+  }, [selectedJobApplication]);
+
+  const isJobValidForApplication = useMemo(() => {
+    if (!selectedJob) return true;
+    const validFrom = selectedJob.valid_from || selectedJob.validFrom;
+    if (!validFrom) return true; // If no valid_from, allow application
+    
+    const validFromDate = new Date(validFrom);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    validFromDate.setHours(0, 0, 0, 0);
+    
+    return validFromDate <= today; // Valid if today or in the past
+  }, [selectedJob]);
+
   const applyButtonLabel = useMemo(() => {
     if (hasAppliedToSelectedJob) return 'Applied';
     if (isApplying) return 'Applying…';
+    if (!isJobValidForApplication) return 'Not Yet Open';
     return 'Apply Now';
-  }, [hasAppliedToSelectedJob, isApplying]);
+  }, [hasAppliedToSelectedJob, isApplying, isJobValidForApplication]);
 
   const jobModalDetails = useMemo(() => {
     if (!selectedJob) return null;
@@ -565,6 +592,8 @@ const JobseekerDashboard = () => {
         ? selectedJob.pwd_types.join(', ')
         : '—';
 
+    const rawValidFrom = selectedJob.valid_from || selectedJob.validFrom || null;
+    const formattedValidFrom = rawValidFrom ? formatDate(rawValidFrom) : 'Not specified';
     const rawValidUntil = selectedJob.valid_until || selectedJob.validUntil || null;
     const formattedValidUntil = rawValidUntil ? formatDate(rawValidUntil) : 'Not specified';
 
@@ -595,6 +624,7 @@ const JobseekerDashboard = () => {
       pwdTypes: pwdTypesLabel,
       pwdOthers: selectedJob.pwd_others_specify || '—',
       acceptsOfw: selectedJob.accepts_ofw || 'Not specified',
+      validFrom: formattedValidFrom,
       validUntil: formattedValidUntil
     };
   }, [selectedJob]);
@@ -1057,6 +1087,23 @@ const JobseekerDashboard = () => {
   const handleApplyToJob = async () => {
     if (!selectedJob?.id || !jobseekerId || hasAppliedToSelectedJob || isApplying) return;
 
+    // Check if job is valid (valid_from must be today or in the past)
+    const validFrom = selectedJob.valid_from || selectedJob.validFrom;
+    if (validFrom) {
+      const validFromDate = new Date(validFrom);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      validFromDate.setHours(0, 0, 0, 0);
+      
+      if (validFromDate > today) {
+        setApplyFeedback({
+          type: 'error',
+          text: `This job is not yet open for applications. Applications will be accepted starting ${formatDate(validFrom)}.`
+        });
+        return;
+      }
+    }
+
     setIsApplying(true);
     setApplyFeedback({ type: null, text: '' });
 
@@ -1141,6 +1188,63 @@ const JobseekerDashboard = () => {
       });
     } finally {
       setIsApplying(false);
+    }
+  };
+
+  const handleCancelApplication = async (applicationId) => {
+    if (!applicationId || !jobseekerId) return;
+
+    const confirmed = window.confirm('Are you sure you want to cancel this application? This action cannot be undone.');
+    if (!confirmed) return;
+
+    // Check if this is the currently selected job's application before removing from list
+    const currentApplication = appliedJobs.find((app) => app.id === applicationId);
+    const isSelectedJobApplication = selectedJob && currentApplication && currentApplication.job.id === selectedJob.id;
+
+    try {
+      // Update application status to 'withdrawn'
+      const { error } = await supabase
+        .from('applications')
+        .update({ status: 'withdrawn' })
+        .eq('id', applicationId)
+        .eq('jobseeker_id', jobseekerId);
+
+      if (error) throw error;
+
+      // Remove from applied jobs list
+      setAppliedJobs((prev) => prev.filter((app) => app.id !== applicationId));
+
+      // If canceling from job modal, close the modal and show feedback
+      if (isSelectedJobApplication) {
+        setApplyFeedback({ type: 'success', text: 'Application cancelled successfully.' });
+        // Close modal after a short delay
+        setTimeout(() => {
+          handleCloseJobModal();
+        }, 1500);
+      } else {
+        // Show success message in profile section
+        setProfileMessage({
+          type: 'success',
+          text: 'Application cancelled successfully.'
+        });
+
+        // Clear message after 3 seconds
+        setTimeout(() => {
+          setProfileMessage({ type: null, text: '' });
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Failed to cancel application:', error);
+      const errorMessage = error.message || 'Unable to cancel the application. Please try again.';
+      
+      if (isSelectedJobApplication) {
+        setApplyFeedback({ type: 'error', text: errorMessage });
+      } else {
+        setProfileMessage({
+          type: 'error',
+          text: errorMessage
+        });
+      }
     }
   };
 
@@ -1298,6 +1402,18 @@ const JobseekerDashboard = () => {
                   <span className="detail-label">Salary Range</span>
                   <span className="detail-value">{application.job.salaryRange}</span>
                 </div>
+                {application.job.validFrom && (
+                  <div className="detail-item">
+                    <span className="detail-label">Valid From</span>
+                    <span className="detail-value">{formatDate(application.job.validFrom)}</span>
+                  </div>
+                )}
+                {application.job.validUntil && (
+                  <div className="detail-item">
+                    <span className="detail-label">Valid Until</span>
+                    <span className="detail-value">{formatDate(application.job.validUntil)}</span>
+                  </div>
+                )}
                 <div className="detail-item">
                   <span className="detail-label">Applied On</span>
                   <span className="detail-value">{formatDate(application.appliedAt)}</span>
@@ -1917,6 +2033,9 @@ const JobseekerDashboard = () => {
                       <strong>Language / Dialect:</strong> {jobModalDetails.language}
                     </li>
                     <li>
+                      <strong>Valid From:</strong> {jobModalDetails.validFrom}
+                    </li>
+                    <li>
                       <strong>Valid Until:</strong> {jobModalDetails.validUntil}
                     </li>
                   </ul>
@@ -1932,6 +2051,15 @@ const JobseekerDashboard = () => {
               <button type="button" className="outline-btn" onClick={handleCloseJobModal}>
                 Close
               </button>
+              {canCancelSelectedJobApplication && (
+                <button
+                  type="button"
+                  className="cancel-btn"
+                  onClick={() => handleCancelApplication(selectedJobApplication.id)}
+                >
+                  Cancel Application
+                </button>
+              )}
               <button
                 type="button"
                 className="primary-btn"
@@ -1940,8 +2068,10 @@ const JobseekerDashboard = () => {
                   !selectedJob ||
                   hasAppliedToSelectedJob ||
                   isApplying ||
-                  !jobseekerId
+                  !jobseekerId ||
+                  !isJobValidForApplication
                 }
+                title={!isJobValidForApplication ? `This job will be open for applications starting ${jobModalDetails?.validFrom || 'a future date'}` : ''}
               >
                 {applyButtonLabel}
               </button>

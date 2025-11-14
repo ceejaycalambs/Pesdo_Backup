@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { supabase } from '../supabase';
+import { logLogin } from '../utils/activityLogger';
 
 const AuthContext = createContext();
 
@@ -142,12 +143,12 @@ export function AuthProvider({ children }) {
     if (expectedUserType === 'admin') {
       const adminResult = await supabase
         .from('admin_profiles')
-        .select('userType')
+        .select('usertype')
         .eq('id', userId)
         .single();
 
       if (!adminResult.error && adminResult.data) {
-        const actualUserType = adminResult.data.userType || 'admin';
+        const actualUserType = adminResult.data.usertype || 'admin';
         console.log('📋 Found in admin_profiles:', actualUserType);
         
         if (expectedUserType !== actualUserType) {
@@ -297,6 +298,15 @@ export function AuthProvider({ children }) {
       });
       
       if (authError) {
+        // Log failed login attempt
+        await logLogin({
+          userId: null,
+          userType: expectedUserType || 'unknown',
+          email: email,
+          status: 'failed',
+          failureReason: authError.message || 'Authentication failed'
+        });
+        
         // Check if error is about email confirmation
         if (authError.message?.includes('Email not confirmed') || 
             authError.message?.includes('email_not_confirmed') ||
@@ -363,9 +373,18 @@ export function AuthProvider({ children }) {
 
         if (!adminResult.error && adminResult.data) {
           console.log('✅ Admin profile fetched:', adminResult.data);
-          const userType = adminResult.data.userType || 'admin';
-          setUserData({...adminResult.data, userType});
+          const userType = adminResult.data.usertype || 'admin';
+          const adminRole = adminResult.data.role || 'admin';
+          setUserData({...adminResult.data, userType: userType});
           setProfileLoaded(true);
+          
+          // Log successful login
+          await logLogin({
+            userId: data.user.id,
+            userType: adminRole === 'super_admin' ? 'super_admin' : 'admin',
+            email: email,
+            status: 'success'
+          });
         } else {
           // If not admin, try employer
           const employerResult = await supabase
@@ -379,6 +398,14 @@ export function AuthProvider({ children }) {
             const userType = employerResult.data.usertype || 'employer';
             setUserData({...employerResult.data, userType});
             setProfileLoaded(true);
+            
+            // Log successful login
+            await logLogin({
+              userId: data.user.id,
+              userType: 'employer',
+              email: email,
+              status: 'success'
+            });
           } else {
             // If not employer, try jobseeker
             const jobseekerResult = await supabase
@@ -392,6 +419,14 @@ export function AuthProvider({ children }) {
               const userType = jobseekerResult.data.usertype || 'jobseeker';
               setUserData({...jobseekerResult.data, userType});
               setProfileLoaded(true);
+              
+              // Log successful login
+              await logLogin({
+                userId: data.user.id,
+                userType: 'jobseeker',
+                email: email,
+                status: 'success'
+              });
             } else {
               console.log('❌ No profile found in any table');
               // Set basic user data with default userType

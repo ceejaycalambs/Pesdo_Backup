@@ -180,23 +180,47 @@ export const useRealtimeNotifications = (userId, userType) => {
           console.error('Error fetching employer jobs for notifications:', employerJobsError);
         } else if (employerJobs && employerJobs.length > 0) {
           const jobIds = employerJobs.map(job => job.id);
+          // Fetch applications separately to avoid ambiguous relationship error
           const { data: applicationData, error: applicationError } = await supabase
             .from('applications')
-            .select('*, jobs(*), jobseeker_profiles(*)')
+            .select('id, job_id, jobseeker_id, status, applied_at, created_at')
             .in('job_id', jobIds)
             .order('created_at', { ascending: false })
             .limit(50);
 
           if (applicationError) {
             console.error('Error fetching employer application notifications:', applicationError);
-          } else if (applicationData) {
+          } else if (applicationData && applicationData.length > 0) {
+            // Fetch job details separately
+            const appJobIds = Array.from(new Set(applicationData.map(app => app.job_id).filter(Boolean)));
+            const { data: jobsData } = await supabase
+              .from('jobs')
+              .select('id, position_title, employer_id')
+              .in('id', appJobIds);
+
+            // Fetch jobseeker profiles separately
+            const appJobseekerIds = Array.from(new Set(applicationData.map(app => app.jobseeker_id).filter(Boolean)));
+            const { data: jobseekerProfiles } = await supabase
+              .from('jobseeker_profiles')
+              .select('id, first_name, last_name, suffix')
+              .in('id', appJobseekerIds);
+
+            // Combine the data
+            const jobsMap = new Map((jobsData || []).map(job => [job.id, job]));
+            const jobseekersMap = new Map((jobseekerProfiles || []).map(js => [js.id, js]));
+
             combinedData = combinedData.concat(
               applicationData
                 .filter(item => {
                   const status = (item.status || '').toLowerCase();
                   return status === 'pending' || status === 'referred';
                 })
-                .map(item => ({ ...item, __source: 'application' }))
+                .map(item => ({
+                  ...item,
+                  jobs: jobsMap.get(item.job_id) || null,
+                  jobseeker_profiles: jobseekersMap.get(item.jobseeker_id) || null,
+                  __source: 'application'
+                }))
             );
           }
         }

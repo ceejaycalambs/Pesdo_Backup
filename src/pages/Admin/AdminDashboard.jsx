@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabase.js';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { currentUser: authUser, userData } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalUsers: 0,
@@ -17,58 +19,127 @@ const AdminDashboard = () => {
   const [adminEmail, setAdminEmail] = useState('');
   const [error, setError] = useState('');
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [adminRole, setAdminRole] = useState(null); // 'admin' or 'super_admin'
 
   useEffect(() => {
     checkAdminAuth();
-  }, []);
+  }, [authUser, userData]);
 
   // Fetch dashboard data only when admin is authenticated
   useEffect(() => {
-    if (adminEmail && currentUser) {
+    if (adminEmail && authUser) {
       fetchDashboardData();
     }
-  }, [adminEmail, currentUser]);
+  }, [adminEmail, authUser]);
+
+  // Prevent trackpad gesture scrolling
+  useEffect(() => {
+    const preventTrackpadGestures = (e) => {
+      // Prevent wheel events with ctrl/meta key (trackpad pinch/zoom gestures)
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        return false;
+      }
+      // Prevent horizontal scrolling from trackpad gestures
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
+    const container = document.querySelector('.admin-dashboard');
+    if (container) {
+      container.addEventListener('wheel', preventTrackpadGestures, { passive: false });
+      container.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+      container.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+    }
+
+    return () => {
+      if (container) {
+        container.removeEventListener('wheel', preventTrackpadGestures);
+      }
+    };
+  }, []);
 
   const checkAdminAuth = async () => {
-    const authenticated = localStorage.getItem('admin_authenticated');
-    const loginTime = localStorage.getItem('admin_login_time');
-    const email = localStorage.getItem('admin_email');
-    
-    if (authenticated === 'true' && loginTime && email) {
-      // Check if login is not older than 24 hours
-      const now = Date.now();
-      const loginTimestamp = Number.parseInt(loginTime);
-      const hoursSinceLogin = (now - loginTimestamp) / (1000 * 60 * 60);
+    // Check if user is authenticated via AuthContext
+    if (!authUser) {
+      // Fallback to localStorage check for backward compatibility
+      const authenticated = localStorage.getItem('admin_authenticated');
+      const loginTime = localStorage.getItem('admin_login_time');
+      const email = localStorage.getItem('admin_email');
       
-      if (hoursSinceLogin < 24) {
-        setAdminEmail(email);
+      if (authenticated === 'true' && loginTime && email) {
+        const now = Date.now();
+        const loginTimestamp = Number.parseInt(loginTime);
+        const hoursSinceLogin = (now - loginTimestamp) / (1000 * 60 * 60);
         
-        // Try to authenticate with Supabase using admin credentials
-        try {
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email: 'admin@pesdo.com',
-            password: 'admin123'
-          });
-          
-          if (error) {
-            console.error('Admin Supabase auth error:', error);
-            console.log('Please run the create_admin_user.sql script in Supabase SQL Editor first');
-          } else {
-            console.log('Admin authenticated with Supabase:', data);
-            setCurrentUser(data.user);
-          }
-        } catch (authError) {
-          console.error('Admin auth error:', authError);
+        if (hoursSinceLogin < 24) {
+          setAdminEmail(email);
+          setLoading(false);
+          return;
+        } else {
+          handleLogout();
+          return;
         }
-        
-        setLoading(false);
       } else {
-        // Session expired
-        handleLogout();
+        navigate('/admin');
+        return;
       }
+    }
+
+    // User is authenticated via AuthContext
+    if (authUser && userData) {
+      // Check if user is an admin
+      const userType = userData.usertype || userData.userType;
+      if (userType !== 'admin') {
+        // Not an admin, redirect to login
+        navigate('/admin');
+        return;
+      }
+
+      setAdminEmail(authUser.email || '');
+      
+      // Always fetch role from database to ensure it's correct for the current user
+      // Don't trust localStorage as it might be stale or from a different user
+      try {
+        const { data: adminProfile, error: profileError } = await supabase
+          .from('admin_profiles')
+          .select('role')
+          .eq('id', authUser.id)
+          .single();
+        
+        if (!profileError && adminProfile) {
+          const role = adminProfile.role || 'admin';
+          setAdminRole(role);
+          // Only update localStorage if it matches the current user's actual role
+          localStorage.setItem('admin_role', role);
+        } else {
+          // Fallback to userData.role if database fetch fails
+          const role = userData.role || 'admin';
+          setAdminRole(role);
+          localStorage.setItem('admin_role', role);
+        }
+      } catch (error) {
+        console.error('Error fetching admin role:', error);
+        // Fallback to userData.role
+        const role = userData.role || 'admin';
+        setAdminRole(role);
+        localStorage.setItem('admin_role', role);
+      }
+      
+      setLoading(false);
     } else {
-      navigate('/admin');
+      // Wait for auth to load
+      setLoading(true);
     }
   };
 
@@ -225,13 +296,14 @@ const AdminDashboard = () => {
       localStorage.removeItem('admin_authenticated');
       localStorage.removeItem('admin_login_time');
       localStorage.removeItem('admin_email');
+      localStorage.removeItem('admin_role');
       
       // Clear Supabase session to prevent authentication conflicts
       await supabase.auth.signOut();
       
-      // Clear current user state
-      setCurrentUser(null);
+      // Clear state
       setAdminEmail('');
+      setAdminRole(null);
       
       console.log('Admin logout completed - Supabase session cleared');
       navigate('/admin');
@@ -342,6 +414,11 @@ const AdminDashboard = () => {
                       <h3>Manage Users</h3>
                       <p>View and manage all user accounts</p>
                     </button>
+            <button className="action-card" onClick={() => navigate('/admin/users?tab=employers')}>
+              <div className="action-icon">🏢</div>
+              <h3>Manage Employers</h3>
+              <p>View and manage employer accounts</p>
+            </button>
             <button className="action-card" onClick={() => navigate('/admin/jobs')}>
               <div className="action-icon">💼</div>
               <h3>Manage Jobs</h3>
@@ -357,11 +434,20 @@ const AdminDashboard = () => {
               <h3>Analytics</h3>
               <p>View system analytics and reports</p>
             </button>
-            <button className="action-card" onClick={() => alert('Settings - Coming Soon!')}>
-              <div className="action-icon">⚙️</div>
-              <h3>Settings</h3>
-              <p>Configure system settings</p>
-            </button>
+            {adminRole === 'super_admin' && (
+              <button className="action-card" onClick={() => navigate('/admin/logs')}>
+                <div className="action-icon">📋</div>
+                <h3>System Logs</h3>
+                <p>View activity and login logs</p>
+              </button>
+            )}
+            {adminRole === 'super_admin' && (
+              <button className="action-card" onClick={() => navigate('/admin/settings')}>
+                <div className="action-icon">⚙️</div>
+                <h3>Admin Management</h3>
+                <p>Manage admin accounts</p>
+              </button>
+            )}
           </div>
         </div>
       </main>

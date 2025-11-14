@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import './AdminLanding.css';
 import Logo_pesdo from '../../assets/Logo_pesdo.png';
 import Pesdo_Office from '../../assets/Pesdo_Office.png';
-import AOS from 'aos';
-import 'aos/dist/aos.css';
 
 const AdminLanding = () => {
   const [email, setEmail] = useState('');
@@ -12,221 +11,180 @@ const AdminLanding = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [showScroll, setShowScroll] = useState(false);
-  const [headerScrolled, setHeaderScrolled] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    AOS.init({
-      duration: prefersReducedMotion ? 0 : 1000,
-      once: false,
-      mirror: true,
-      disable: prefersReducedMotion
-    });
-
-    const handleScroll = () => {
-      setShowScroll(window.scrollY > 300);
-      setHeaderScrolled(window.scrollY > 10);
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  // Admin credentials (in production, use proper authentication)
-  const ADMIN_CREDENTIALS = {
-    email: 'admin@pesdo.com',
-    password: 'admin123'
-  };
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    // Simulate authentication delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
-      // Store admin session
+    try {
+      // Use AuthContext login function with 'admin' as expected user type
+      await login(email, password, 'admin');
+      
+      // Store admin session for backward compatibility
       localStorage.setItem('admin_authenticated', 'true');
       localStorage.setItem('admin_login_time', Date.now().toString());
       localStorage.setItem('admin_email', email);
       
       // Navigate to admin dashboard
       navigate('/admin/dashboard');
-    } else {
-      setError('Invalid admin credentials. Please check your email and password.');
+    } catch (err) {
+      console.error('Admin login error:', err);
+      setError(err.message || 'Invalid admin credentials. Please check your email and password.');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-  };
-
-  const scrollTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
     <div className="admin-landing">
-      <a href="#main" className="skip-link">Skip to main content</a>
-      {/* Fixed Navigation */}
-      <header className={`admin-header ${headerScrolled ? 'scrolled' : ''}`} role="banner" aria-label="Admin header">
+      {/* Header */}
+      <header className="admin-header">
         <div className="admin-header-content">
           <div className="admin-header-brand">
             <img src={Logo_pesdo} alt="PESDO Logo" className="admin-header-logo" />
             <h1>PESDO Admin Portal</h1>
           </div>
-          <nav aria-label="Admin navigation">
-            <button 
-              onClick={() => navigate('/')}
-              className="btn btn-outline"
-            >
-              ← Back to Main Site
-            </button>
-          </nav>
+          <button 
+            onClick={() => navigate('/')}
+            className="back-btn"
+          >
+            ← Back to Main Site
+          </button>
         </div>
       </header>
 
-      <main id="main">
-        {/* Hero Section */}
-        <section
-          className="admin-hero"
+      {/* Main Content - Split Layout */}
+      <main className="admin-main">
+        {/* Background Image Container */}
+        <div 
+          className="admin-main-background"
           style={{
-            backgroundImage: `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${Pesdo_Office})`
+            backgroundImage: `url(${Pesdo_Office})`
           }}
-          aria-label="Admin Hero"
         >
-          <div className="admin-hero-content" data-aos="fade-up">
-            <h2>Administrative Access Portal</h2>
-            <p>Secure access to system administration and management tools.</p>
-          </div>
-          <a className="scroll-down" href="#admin-login" aria-label="Scroll to login form">↓</a>
-        </section>
+          <div className="admin-main-overlay"></div>
+        </div>
 
-        {/* Admin Login Section */}
-        <section id="admin-login" className="admin-login-section" aria-label="Admin login" data-aos="fade-up">
-          <div className="admin-login-container">
-            <div className="admin-login-card">
-              <div className="login-header">
-                <h3>🔐 Admin Login</h3>
-                <p>Enter your administrative credentials to access the admin dashboard</p>
+        {/* Left Side - Welcome Section with Background */}
+        <div className="admin-welcome-section">
+          <div className="welcome-content">
+            <div className="welcome-icon">🔐</div>
+            <h2>Administrative Access</h2>
+            <p>Welcome to the PESDO Admin Portal. Please sign in with your administrative credentials to access the dashboard.</p>
+            
+            <div className="features-preview">
+              <div className="feature-item">
+                <span className="feature-icon">👥</span>
+                <span>User Management</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">📊</span>
+                <span>Analytics & Reports</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">💼</span>
+                <span>Job Management</span>
+              </div>
+              <div className="feature-item">
+                <span className="feature-icon">🔒</span>
+                <span>Security Controls</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side - Login Form */}
+        <div className="admin-login-section">
+          <div className="login-card">
+            <div className="login-header">
+              <h3>Admin Login</h3>
+              <p>Enter your credentials to continue</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="admin-login-form">
+              <div className="form-group">
+                <label htmlFor="admin-email">Email Address</label>
+                <input
+                  id="admin-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@pesdo.com"
+                  required
+                  disabled={loading}
+                  className="admin-input"
+                />
               </div>
 
-              <form onSubmit={handleSubmit} className="admin-login-form">
-                <div className="form-group">
-                  <label htmlFor="admin-email">Admin Email</label>
+              <div className="form-group">
+                <label htmlFor="admin-password">Password</label>
+                <div className="password-input-container">
                   <input
-                    id="admin-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin@pesdo.com"
+                    id="admin-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter your password"
                     required
                     disabled={loading}
                     className="admin-input"
                   />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="admin-password">Password</label>
-                  <div className="password-input-container">
-                    <input
-                      id="admin-password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      required
-                      disabled={loading}
-                      className="admin-input"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="password-toggle"
-                      disabled={loading}
-                    >
-                      {showPassword ? '🙈' : '👁️'}
-                    </button>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="error-message">
-                    {error}
-                  </div>
-                )}
-
-                <button 
-                  type="submit" 
-                  disabled={loading || !email.trim() || !password.trim()}
-                  className="admin-login-btn"
-                >
-                  {loading ? (
-                    <div className="loading-content">
-                      <div className="loading-spinner"></div>
-                      Authenticating...
-                    </div>
-                  ) : (
-                    'Access Admin Dashboard'
-                  )}
-                </button>
-              </form>
-
-              <div className="login-footer">
-                <div className="demo-credentials">
-                  <h4>Demo Credentials:</h4>
-                  <p><strong>Email:</strong> admin@pesdo.com</p>
-                  <p><strong>Password:</strong> admin123</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="password-toggle"
+                    disabled={loading}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                    )}
+                  </button>
                 </div>
               </div>
-            </div>
-          </div>
-        </section>
 
-        {/* Admin Features Section */}
-        <section className="admin-features" aria-label="Admin features" data-aos="fade-up">
-          <h3>Admin Dashboard Features</h3>
-          <ul className="admin-feature-cards">
-            <li className="admin-card" data-aos="fade-up">
-              <div className="admin-card-icon" aria-hidden="true">👥</div>
-              <h4 className="admin-card-title">User Management</h4>
-              <p className="admin-card-desc">View, manage, and delete user accounts</p>
-            </li>
-            <li className="admin-card" data-aos="fade-up" data-aos-delay="100">
-              <div className="admin-card-icon" aria-hidden="true">📊</div>
-              <h4 className="admin-card-title">Analytics</h4>
-              <p className="admin-card-desc">Monitor system usage and statistics</p>
-            </li>
-            <li className="admin-card" data-aos="fade-up" data-aos-delay="200">
-              <div className="admin-card-icon" aria-hidden="true">⚙️</div>
-              <h4 className="admin-card-title">System Settings</h4>
-              <p className="admin-card-desc">Configure application settings</p>
-            </li>
-            <li className="admin-card" data-aos="fade-up" data-aos-delay="300">
-              <div className="admin-card-icon" aria-hidden="true">🔒</div>
-              <h4 className="admin-card-title">Security</h4>
-              <p className="admin-card-desc">Manage security and access controls</p>
-            </li>
-          </ul>
-        </section>
+              {error && (
+                <div className="error-message">
+                  {error}
+                </div>
+              )}
+
+              <button 
+                type="submit" 
+                disabled={loading || !email.trim() || !password.trim()}
+                className="admin-login-btn"
+              >
+                {loading ? (
+                  <div className="loading-content">
+                    <div className="loading-spinner"></div>
+                    <span>Signing in...</span>
+                  </div>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
       </main>
 
       {/* Footer */}
-      <footer className="admin-footer" data-aos="fade-up">
+      <footer className="admin-footer">
         <p>© 2025 PESDO Surigao City | Administrative Access Only</p>
       </footer>
-
-      {/* Scroll-to-Top Button */}
-      {showScroll && (
-        <button className="scroll-top" onClick={scrollTop} aria-label="Scroll back to top">
-          ↑
-        </button>
-      )}
     </div>
   );
 };
 
 export default AdminLanding;
-
