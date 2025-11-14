@@ -108,6 +108,55 @@
   border-radius: 999px;
 }
 
+.analytics-analytics-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px;
+}
+
+.analytics-charts {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.chart-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f6fbff 100%);
+  border-radius: 20px;
+  padding: 22px 24px;
+  box-shadow: 0 18px 32px rgba(15, 43, 58, 0.12);
+  border: 1px solid rgba(15, 43, 58, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: 320px;
+}
+
+.chart-card-header h3 {
+  margin: 0;
+  color: #0f2b3a;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.chart-card-header p {
+  margin: 4px 0 0 0;
+  color: #4b5e6d;
+  font-size: 0.9rem;
+}
+
+.chart-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+}
+
+.analytics-table--compact {
+  min-width: 0;
+  width: 100%;
+}
+
 .analytics-filters {
   display: flex;
   align-items: flex-end;
@@ -280,6 +329,14 @@
 @media (max-width: 768px) {
   .analytics-tabs {
     flex-direction: column;
+  }
+
+  .analytics-analytics-view {
+    padding: 18px;
+  }
+
+  .chart-card {
+    padding: 18px;
   }
 
   .analytics-main {

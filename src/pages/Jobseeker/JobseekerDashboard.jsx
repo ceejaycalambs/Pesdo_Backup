@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { supabase } from '../../supabase.js';
 import NotificationButton from '../../components/NotificationButton';
@@ -7,7 +7,7 @@ import './JobseekerDashboard.css';
 
 const NAV_ITEMS = [
   { key: 'all-jobs', label: 'All Jobs', icon: '🗂️' },
-  { key: 'applied', label: 'Applied Jobs', icon: '📌' },
+  { key: 'applied', label: 'Applied & Referred', icon: '📌' },
   { key: 'profile', label: 'Edit Profile', icon: '📝' },
   { key: 'resume', label: 'Resume & CV', icon: '📄' }
 ];
@@ -110,12 +110,37 @@ const JobseekerDashboard = () => {
     success: '',
     error: ''
   });
+  const [resumePendingFile, setResumePendingFile] = useState(null);
+  const resumeInputRef = useRef(null);
 
   const [avatarState, setAvatarState] = useState({
     uploading: false,
     success: '',
     error: ''
   });
+
+  const extractStoragePathFromUrl = (publicUrl) => {
+    if (!publicUrl) return null;
+    try {
+      const url = new URL(publicUrl);
+      const marker = '/object/public/files/';
+      const index = url.pathname.indexOf(marker);
+      if (index === -1) return null;
+      return decodeURIComponent(url.pathname.slice(index + marker.length));
+    } catch (error) {
+      console.warn('Unable to parse storage URL:', publicUrl, error);
+      return null;
+    }
+  };
+
+  const deleteStorageFile = async (publicUrl) => {
+    const storagePath = extractStoragePathFromUrl(publicUrl);
+    if (!storagePath) return;
+    const { error } = await supabase.storage.from('files').remove([storagePath]);
+    if (error) {
+      console.warn('Failed to remove storage object:', storagePath, error);
+    }
+  };
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
@@ -538,6 +563,9 @@ const JobseekerDashboard = () => {
         ? selectedJob.pwd_types.join(', ')
         : '—';
 
+    const rawValidUntil = selectedJob.valid_until || selectedJob.validUntil || null;
+    const formattedValidUntil = rawValidUntil ? formatDate(rawValidUntil) : 'Not specified';
+
     return {
       assignmentType: `${selectedJob.location} / ${selectedJob.employmentType}`,
       location: selectedJob.location || 'Location not specified',
@@ -565,7 +593,7 @@ const JobseekerDashboard = () => {
       pwdTypes: pwdTypesLabel,
       pwdOthers: selectedJob.pwd_others_specify || '—',
       acceptsOfw: selectedJob.accepts_ofw || 'Not specified',
-      validUntil: selectedJob.valid_until ? formatDate(selectedJob.valid_until) : 'Not specified'
+      validUntil: formattedValidUntil
     };
   }, [selectedJob]);
 
@@ -695,18 +723,74 @@ const JobseekerDashboard = () => {
     }
   };
 
-  const handleResumeUpload = async (event) => {
+  const handleResumeFileSelect = (event) => {
     const file = event.target.files?.[0];
-    if (!file || !jobseekerId) return;
+    if (!file) return;
 
     setResumeState({ uploading: false, success: '', error: '' });
 
+    if (!jobseekerId) {
+      setResumeState({
+        uploading: false,
+        success: '',
+        error: 'You must be logged in to upload a resume.'
+      });
+      event.target.value = '';
+      return;
+    }
+
+    if (!ALLOWED_RESUME_TYPES.has(file.type)) {
+      setResumePendingFile(null);
+      setResumeState({
+        uploading: false,
+        success: '',
+        error: 'Please upload a PDF or Word document.'
+      });
+      event.target.value = '';
+      return;
+    }
+
+    const sizeInMb = file.size / (1024 * 1024);
+    if (sizeInMb > MAX_RESUME_SIZE_MB) {
+      setResumePendingFile(null);
+      setResumeState({
+        uploading: false,
+        success: '',
+        error: `File is too large. Maximum allowed size is ${MAX_RESUME_SIZE_MB} MB.`
+      });
+      event.target.value = '';
+      return;
+    }
+
+    setResumePendingFile(file);
+    setResumeState({
+      uploading: false,
+      success: `Ready to upload “${file.name}”. Click Upload to continue.`,
+      error: ''
+    });
+  };
+
+  const handleResumeUpload = async () => {
+    if (!resumePendingFile || !jobseekerId) {
+      setResumeState({
+        uploading: false,
+        success: '',
+        error: 'Please choose a resume file before uploading.'
+      });
+      return;
+    }
+
+    const file = resumePendingFile;
     if (!ALLOWED_RESUME_TYPES.has(file.type)) {
       setResumeState({
         uploading: false,
         success: '',
         error: 'Please upload a PDF or Word document.'
       });
+      setResumePendingFile(null);
+      if (resumeInputRef.current) {
+        resumeInputRef.current.value = '';
+      }
       return;
     }
 
@@ -717,10 +801,18 @@ const JobseekerDashboard = () => {
         success: '',
         error: `File is too large. Maximum allowed size is ${MAX_RESUME_SIZE_MB} MB.`
       });
+      setResumePendingFile(null);
+      if (resumeInputRef.current) {
+        resumeInputRef.current.value = '';
+      }
       return;
     }
 
     setResumeState({ uploading: true, success: '', error: '' });
+
+    if (profile?.resume_url) {
+      await deleteStorageFile(profile.resume_url);
+    }
 
     const extension = file.name.split('.').pop()?.toLowerCase() || 'pdf';
     const filePath = `jobseekers/${jobseekerId}/resume-${Date.now()}.${extension}`;
@@ -762,6 +854,7 @@ const JobseekerDashboard = () => {
         success: 'Resume uploaded successfully.',
         error: ''
       });
+      setResumePendingFile(null);
     } catch (error) {
       console.error('Failed to upload resume:', error);
       setResumeState({
@@ -770,7 +863,54 @@ const JobseekerDashboard = () => {
         error: 'Unable to upload resume. Please try again.'
       });
     } finally {
-      event.target.value = '';
+      if (resumeInputRef.current) {
+        resumeInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleResumeRemove = async () => {
+    if (!jobseekerId || !profile?.resume_url) return;
+
+    setResumeState({ uploading: true, success: '', error: '' });
+
+    try {
+      await deleteStorageFile(profile.resume_url);
+
+      const updatedAt = new Date().toISOString();
+      const { error } = await supabase
+        .from('jobseeker_profiles')
+        .update({
+          resume_url: null,
+          updated_at: updatedAt
+        })
+        .eq('id', jobseekerId);
+
+      if (error) throw error;
+
+      setProfile((prev) => ({
+        ...prev,
+        resume_url: null,
+        updated_at: updatedAt
+      }));
+
+      setResumePendingFile(null);
+      if (resumeInputRef.current) {
+        resumeInputRef.current.value = '';
+      }
+
+      setResumeState({
+        uploading: false,
+        success: 'Resume removed successfully.',
+        error: ''
+      });
+    } catch (error) {
+      console.error('Failed to remove resume:', error);
+      setResumeState({
+        uploading: false,
+        success: '',
+        error: 'Unable to remove resume right now. Please try again.'
+      });
     }
   };
 
@@ -799,6 +939,10 @@ const JobseekerDashboard = () => {
       });
       event.target.value = '';
       return;
+    }
+
+    if (profile?.profile_picture_url) {
+      await deleteStorageFile(profile.profile_picture_url);
     }
 
     const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
@@ -857,6 +1001,10 @@ const JobseekerDashboard = () => {
     setAvatarState({ uploading: true, success: '', error: '' });
 
     try {
+      if (profile?.profile_picture_url) {
+        await deleteStorageFile(profile.profile_picture_url);
+      }
+
       const { error: updateError } = await supabase
         .from('jobseeker_profiles')
         .update({
@@ -1398,61 +1546,103 @@ const JobseekerDashboard = () => {
 
   const renderResumeSection = () => {
     const hasResume = Boolean(profile?.resume_url);
+    const fileName = profile?.resume_url
+      ? profile.resume_url.split('/').pop()?.split('?')[0]
+      : '';
+    const uploadedDate = profile?.resume_uploaded_at || profile?.updated_at || null;
+
     return (
       <div className="resume-section">
-        <section className="resume-upload">
-          <h2>Upload Resume or CV</h2>
-          <p className="muted">
+        <div className="resume-card upload">
+          <div className="resume-card-header">
+            <h2>Upload Resume / CV</h2>
+            <p className="muted">
+              Provide your latest resume so employers can review your qualifications instantly.
+            </p>
+          </div>
+
+          <div className="resume-card-body">
+            <label className="upload-control">
+              <input
+                ref={resumeInputRef}
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={handleResumeFileSelect}
+                disabled={resumeState.uploading}
+              />
+              <span className="upload-button">{resumeState.uploading ? 'Uploading…' : 'Choose File'}</span>
+            </label>
+
+            <button
+            type="button"
+            className="primary-btn"
+            onClick={handleResumeUpload}
+            disabled={resumeState.uploading || !resumePendingFile}
+            >
+              Upload
+            </button>
+          </div>
+
+          <p className="upload-hint">
             Accepted formats: PDF, DOC, DOCX — up to {MAX_RESUME_SIZE_MB} MB.
           </p>
 
-          <label className="upload-tile">
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx"
-              onChange={handleResumeUpload}
-              disabled={resumeState.uploading}
-                        />
-            <div className="upload-icon">⬆️</div>
-            <div className="upload-text">
-              {resumeState.uploading ? 'Uploading…' : 'Click to upload your resume'}
-                      </div>
-          </label>
-
           {resumeState.error ? <div className="form-message error">{resumeState.error}</div> : null}
           {resumeState.success ? <div className="form-message success">{resumeState.success}</div> : null}
-        </section>
+        </div>
 
-        <section className="resume-preview">
-          <h2>Your Latest Resume</h2>
-          {hasResume ? (
-            <div className="resume-card">
-              <div>
-                <p className="resume-filename">
-                  {profile.resume_url.split('/').pop()?.split('?')[0]}
-                </p>
-                <p className="muted">
-                  Uploaded on {formatDate(profile.resume_uploaded_at || profile.updated_at)}
-                </p>
+        <div className="resume-card preview">
+          <div className="resume-card-header">
+            <h2>Uploaded Document</h2>
+            <p className="muted">
+              View or download your latest resume. Keep this updated for better matching.
+            </p>
+          </div>
+
+          <div className="resume-card-body">
+            {hasResume ? (
+              <>
+                <div className="resume-file-info">
+                  <div className="resume-file-icon">📄</div>
+                  <div>
+                    <p className="resume-filename">{fileName}</p>
+                    <p className="resume-meta">
+                      Uploaded on {uploadedDate ? formatDate(uploadedDate) : '—'}
+                    </p>
                   </div>
-              <div className="resume-actions">
-                <a href={profile.resume_url} target="_blank" rel="noopener noreferrer" className="outline-btn">
-                  View
-                </a>
-                <a href={profile.resume_url} download className="primary-btn">
-                  Download
-                </a>
-                  </div>
-                  </div>
-          ) : (
-            <div className="empty-state bordered">
-              <div className="empty-icon">📄</div>
-              <h3>No resume on file</h3>
-              <p>Upload your latest resume to make it easy for employers to review your credentials.</p>
-                    </div>
-                  )}
-        </section>
-                    </div>
+                </div>
+                <div className="resume-actions">
+                  <a
+                    href={profile.resume_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="outline-btn"
+                  >
+                    View File
+                  </a>
+                  <a href={profile.resume_url} download className="outline-btn">
+                    Download
+                  </a>
+                  <button
+                    type="button"
+                    className="outline-btn danger"
+                    onClick={handleResumeRemove}
+                    disabled={resumeState.uploading}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="resume-empty">
+                <div className="empty-icon">📄</div>
+                <h3>No document uploaded</h3>
+                <p>Once you upload a resume or CV, it will appear here for quick access.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -1517,9 +1707,6 @@ const JobseekerDashboard = () => {
             >
               <span className="nav-icon">{item.icon}</span>
               <span>{item.label}</span>
-              {item.key === 'applied' && appliedJobs.length > 0 ? (
-                <span className="nav-badge">{appliedJobs.length}</span>
-              ) : null}
         </button>
           ))}
         </nav>
@@ -1545,7 +1732,7 @@ const JobseekerDashboard = () => {
                 {activeTab === 'all-jobs' &&
                   'Browse job vacancies approved by the PESDO administrator.'}
                 {activeTab === 'applied' &&
-                  'Monitor the progress of each job application.'}
+                  'Monitor the progress of each job application and referrals.'}
                 {activeTab === 'profile' &&
                   'Keep your information up to date so employers can reach you easily.'}
                 {activeTab === 'resume' &&

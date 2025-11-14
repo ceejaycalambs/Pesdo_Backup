@@ -1,8 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase.js';
 import './AdminDashboard.css';
 import './AdminAnalytics.css';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Title
+} from 'chart.js';
+import { Bar, Doughnut } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, Title);
+
+const BAR_COLORS = ['#0ea5e9', '#38bdf8', '#22d3ee', '#34d399', '#f97316'];
+const DOUGHNUT_COLORS = ['#2563eb', '#f97316', '#10b981', '#6366f1'];
 
 const AdminAnalytics = () => {
   const navigate = useNavigate();
@@ -13,6 +29,7 @@ const AdminAnalytics = () => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [analyticsTab, setAnalyticsTab] = useState('jobseekers');
   const [analyticsData, setAnalyticsData] = useState({
+    analytics: [],
     jobseekers: [],
     employers: [],
     vacancies: [],
@@ -21,6 +38,106 @@ const AdminAnalytics = () => {
   });
   const [jobseekerDateRange, setJobseekerDateRange] = useState({ from: '', to: '' });
   const [employerDateRange, setEmployerDateRange] = useState({ from: '', to: '' });
+  const [referralDateRange, setReferralDateRange] = useState({ from: '', to: '' });
+  const [placementDateRange, setPlacementDateRange] = useState({ from: '', to: '' });
+
+  const analyticsSummary = analyticsData.analytics || [];
+
+  const barChartData = useMemo(() => {
+    if (!analyticsSummary.length) return null;
+
+    return {
+      labels: analyticsSummary.map(item => item.metric),
+      datasets: [
+        {
+          label: 'Count',
+          data: analyticsSummary.map(item => item.value),
+          backgroundColor: analyticsSummary.map((_, index) => BAR_COLORS[index % BAR_COLORS.length]),
+          borderRadius: 12,
+          maxBarThickness: 48
+        }
+      ]
+    };
+  }, [analyticsSummary]);
+
+  const barChartOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          mode: 'index',
+          intersect: false
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#123247',
+            font: {
+              weight: 600
+            }
+          },
+          grid: {
+            display: false
+          }
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            precision: 0,
+            color: '#123247',
+            font: {
+              weight: 600
+            }
+          },
+          grid: {
+            color: 'rgba(18, 50, 71, 0.08)'
+          }
+        }
+      }
+    }),
+    []
+  );
+
+  const doughnutData = useMemo(() => {
+    if (!analyticsSummary.length) return null;
+
+    const placements = analyticsSummary.find(item => item.id === 'total-placements')?.value || 0;
+    const referrals = analyticsSummary.find(item => item.id === 'total-referrals')?.value || 0;
+    const employers = analyticsSummary.find(item => item.id === 'total-employers')?.value || 0;
+
+    return {
+      labels: ['Job Placements', 'Referrals', 'Registered Employers'],
+      datasets: [
+        {
+          data: [placements, referrals, employers],
+          backgroundColor: DOUGHNUT_COLORS.slice(0, 3),
+          borderWidth: 0
+        }
+      ]
+    };
+  }, [analyticsSummary]);
+
+  const doughnutOptions = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            padding: 14,
+            usePointStyle: true
+          }
+        }
+      }
+    }),
+    []
+  );
 
   useEffect(() => {
     checkAdminAuth();
@@ -94,7 +211,7 @@ const AdminAnalytics = () => {
         .from('jobs')
         .select(`
           *,
-          employer_profiles ( business_name, acronym, full_address )
+          employer_profiles ( business_name, acronym, full_address, employer_type )
         `)
         .eq('status', 'approved');
 
@@ -162,6 +279,7 @@ const AdminAnalytics = () => {
         employerName: job.employer_profiles?.business_name || '—',
         employerAcronym: job.employer_profiles?.acronym || '—',
         employerAddress: job.employer_profiles?.full_address || '—',
+        employerType: job.employer_profiles?.employer_type || '—',
         jobLocation: job.job_location || job.work_location || job.place_of_work || '—',
         employmentType: job.employment_type || job.employment_type_text || job.nature_of_work || '—',
         vacancyCount: job.vacancy_count || job.total_positions || '—',
@@ -196,11 +314,23 @@ const AdminAnalytics = () => {
 
           return {
             id: app.id,
-            jobTitle: job.title || job.job_title || 'Job Vacancy',
+            jobTitle: job.jobPosition || 'Job Vacancy',
+            employer: job.employerName || '—',
+            employerAddress: job.employerAddress || '—',
             jobseeker: seekerName,
+            jobseekerGender: seeker.gender || '—',
             appliedAt: app.applied_at || app.created_at
           };
         });
+
+      const normalizePlacementStatus = (status) => {
+        const normalized = (status || '').toLowerCase();
+        if (['approved', 'accepted', 'hired', 'placed'].includes(normalized)) {
+          return 'Hired';
+        }
+        if (!status) return 'Completed';
+        return status.charAt(0).toUpperCase() + status.slice(1);
+      };
 
       const placementList = (applications || [])
         .filter(app => placementStatuses.has((app.status || '').toLowerCase()))
@@ -211,14 +341,27 @@ const AdminAnalytics = () => {
 
           return {
             id: app.id,
-            jobTitle: job.title || job.job_title || 'Job Vacancy',
+            jobTitle: job.jobPosition || 'Job Vacancy',
+            employer: job.employerName || '—',
+            employerAddress: job.employerAddress || '—',
+            employerType: job.employerType || '—',
             jobseeker: seekerName,
-            status: app.status || 'Completed',
+            jobseekerGender: seeker.gender || '—',
+            status: normalizePlacementStatus(app.status),
             appliedAt: app.applied_at || app.created_at
           };
         });
 
+      const analyticsSummary = [
+        { id: 'total-jobseekers', metric: 'Registered Jobseekers', value: jobseekerList.length },
+        { id: 'total-employers', metric: 'Registered Employers', value: employerList.length },
+        { id: 'total-vacancies', metric: 'Approved Vacancies', value: vacancyList.length },
+        { id: 'total-referrals', metric: 'Referrals', value: referralList.length },
+        { id: 'total-placements', metric: 'Job Placements', value: placementList.length }
+      ];
+
       setAnalyticsData({
+        analytics: analyticsSummary,
         jobseekers: jobseekerList,
         employers: employerList,
         vacancies: vacancyList,
@@ -255,6 +398,7 @@ const AdminAnalytics = () => {
   };
 
   const analyticsCounts = {
+    analytics: analyticsData.analytics.length,
     jobseekers: analyticsData.jobseekers.length,
     employers: analyticsData.employers.length,
     vacancies: analyticsData.vacancies.length,
@@ -263,6 +407,15 @@ const AdminAnalytics = () => {
   };
 
   const analyticsConfig = {
+    analytics: {
+      label: 'Analytics',
+      description: 'Quick overview of key system metrics.',
+      columns: [
+        { header: 'Metric', accessor: item => item.metric, csvAccessor: item => item.metric || '' },
+        { header: 'Value', accessor: item => item.value.toString(), csvAccessor: item => String(item.value ?? '') }
+      ],
+      empty: 'No analytics summary available.'
+    },
     jobseekers: {
       label: 'Registered Jobseekers',
       description: 'List of jobseekers who have created their accounts.',
@@ -334,9 +487,12 @@ const AdminAnalytics = () => {
       label: 'Referrals',
       description: 'Applications referred by the admin team.',
       columns: [
-        { header: 'Job Position', accessor: item => item.jobPosition },
-        { header: 'Jobseeker', accessor: item => item.jobseeker },
-        { header: 'Referral Date', accessor: item => item.appliedAt ? new Date(item.appliedAt).toLocaleDateString() : '—' }
+        { header: 'Job Position', accessor: item => item.jobTitle, csvAccessor: item => item.jobTitle || '' },
+        { header: 'Employer', accessor: item => item.employer || '—', csvAccessor: item => item.employer || '' },
+        { header: 'Employer Address', accessor: item => item.employerAddress || '—', csvAccessor: item => item.employerAddress || '' },
+        { header: 'Jobseeker', accessor: item => item.jobseeker, csvAccessor: item => item.jobseeker || '' },
+        { header: 'Jobseeker Gender', accessor: item => item.jobseekerGender || '—', csvAccessor: item => item.jobseekerGender || '' },
+        { header: 'Referral Date', accessor: item => item.appliedAt ? new Date(item.appliedAt).toLocaleDateString('en-CA') : '—', csvAccessor: item => item.appliedAt ? new Date(item.appliedAt).toISOString().split('T')[0] : '' }
       ],
       empty: 'No referrals recorded yet.'
     },
@@ -344,52 +500,55 @@ const AdminAnalytics = () => {
       label: 'Job Placements',
       description: 'Successful job placements recorded within the system.',
       columns: [
-        { header: 'Job Position', accessor: item => item.jobPosition },
-        { header: 'Jobseeker', accessor: item => item.jobseeker },
-        { header: 'Status', accessor: item => (item.status || 'Completed').toUpperCase() },
-        { header: 'Date', accessor: item => item.appliedAt ? new Date(item.appliedAt).toLocaleDateString() : '—' }
+        { header: 'Job Position', accessor: item => item.jobTitle, csvAccessor: item => item.jobTitle || '' },
+        { header: 'Employer', accessor: item => item.employer || '—', csvAccessor: item => item.employer || '' },
+        { header: 'Employer Address', accessor: item => item.employerAddress || '—', csvAccessor: item => item.employerAddress || '' },
+        { header: 'Employer Type', accessor: item => item.employerType || '—', csvAccessor: item => item.employerType || '' },
+        { header: 'Jobseeker', accessor: item => item.jobseeker, csvAccessor: item => item.jobseeker || '' },
+        { header: 'Jobseeker Gender', accessor: item => item.jobseekerGender || '—', csvAccessor: item => item.jobseekerGender || '' },
+        { header: 'Status', accessor: item => item.status || 'Completed', csvAccessor: item => item.status || 'Completed' },
+        { header: 'Date', accessor: item => item.appliedAt ? new Date(item.appliedAt).toLocaleDateString('en-CA') : '—', csvAccessor: item => item.appliedAt ? new Date(item.appliedAt).toISOString().split('T')[0] : '' }
       ],
       empty: 'No job placements recorded yet.'
     }
   };
 
+  const filterRowsByDate = (rows, getDateValue, range) => {
+    if (!rows.length) return rows;
+
+    const fromTime = range.from ? new Date(`${range.from}T00:00:00`).getTime() : null;
+    const toTime = range.to ? new Date(`${range.to}T23:59:59`).getTime() : null;
+
+    if (!fromTime && !toTime) return rows;
+
+    return rows.filter((item) => {
+      const dateValue = getDateValue(item);
+      if (!dateValue) return false;
+      const itemTime = new Date(dateValue).getTime();
+      if (Number.isNaN(itemTime)) return false;
+      if (fromTime && itemTime < fromTime) return false;
+      if (toTime && itemTime > toTime) return false;
+      return true;
+    });
+  };
+
   const getFilteredRows = () => {
-    let rows = analyticsData[analyticsTab] || [];
-    if (analyticsTab === 'jobseekers') {
-      const fromTime = jobseekerDateRange.from ? new Date(`${jobseekerDateRange.from}T00:00:00`).getTime() : null;
-      const toTime = jobseekerDateRange.to ? new Date(`${jobseekerDateRange.to}T23:59:59`).getTime() : null;
-      rows = rows.filter(item => {
-        if (!item.registeredAt) return false;
-        const itemTime = new Date(item.registeredAt).getTime();
-        if (Number.isNaN(itemTime)) return false;
-        if (fromTime && itemTime < fromTime) return false;
-        if (toTime && itemTime > toTime) return false;
-        return true;
-      });
-    } else if (analyticsTab === 'employers') {
-      const fromTime = employerDateRange.from ? new Date(`${employerDateRange.from}T00:00:00`).getTime() : null;
-      const toTime = employerDateRange.to ? new Date(`${employerDateRange.to}T23:59:59`).getTime() : null;
-      rows = rows.filter(item => {
-        if (!item.registeredAt) return false;
-        const itemTime = new Date(item.registeredAt).getTime();
-        if (Number.isNaN(itemTime)) return false;
-        if (fromTime && itemTime < fromTime) return false;
-        if (toTime && itemTime > toTime) return false;
-        return true;
-      });
-    } else if (analyticsTab === 'vacancies') {
-      const fromTime = employerDateRange.from ? new Date(`${employerDateRange.from}T00:00:00`).getTime() : null;
-      const toTime = employerDateRange.to ? new Date(`${employerDateRange.to}T23:59:59`).getTime() : null;
-      rows = rows.filter(item => {
-        if (!item.postedAt) return false;
-        const itemTime = new Date(item.postedAt).getTime();
-        if (Number.isNaN(itemTime)) return false;
-        if (fromTime && itemTime < fromTime) return false;
-        if (toTime && itemTime > toTime) return false;
-        return true;
-      });
+    const rows = analyticsData[analyticsTab] || [];
+
+    switch (analyticsTab) {
+      case 'jobseekers':
+        return filterRowsByDate(rows, (item) => item.registeredAt, jobseekerDateRange);
+      case 'employers':
+        return filterRowsByDate(rows, (item) => item.registeredAt, employerDateRange);
+      case 'vacancies':
+        return filterRowsByDate(rows, (item) => item.postedAt, employerDateRange);
+      case 'referrals':
+        return filterRowsByDate(rows, (item) => item.appliedAt, referralDateRange);
+      case 'placements':
+        return filterRowsByDate(rows, (item) => item.appliedAt, placementDateRange);
+      default:
+        return rows;
     }
-    return rows;
   };
 
   const handleExportCsv = () => {
@@ -433,6 +592,75 @@ const AdminAnalytics = () => {
     URL.revokeObjectURL(url);
   };
 
+  const renderDateFilters = () => {
+    let range = null;
+    let setRange = null;
+
+    switch (analyticsTab) {
+      case 'jobseekers':
+        range = jobseekerDateRange;
+        setRange = setJobseekerDateRange;
+        break;
+      case 'employers':
+      case 'vacancies':
+        range = employerDateRange;
+        setRange = setEmployerDateRange;
+        break;
+      case 'referrals':
+        range = referralDateRange;
+        setRange = setReferralDateRange;
+        break;
+      case 'placements':
+        range = placementDateRange;
+        setRange = setPlacementDateRange;
+        break;
+      default:
+        return null;
+    }
+
+    const baseId = `${analyticsTab}-date`;
+    const isRangeEmpty = !range.from && !range.to;
+
+    return (
+      <div className="analytics-filters">
+        <div className="date-filter-group">
+          <label htmlFor={`${baseId}-from`}>From</label>
+          <input
+            id={`${baseId}-from`}
+            type="date"
+            value={range.from}
+            onChange={(e) => setRange(prev => ({ ...prev, from: e.target.value }))}
+          />
+        </div>
+        <div className="date-filter-group">
+          <label htmlFor={`${baseId}-to`}>To</label>
+          <input
+            id={`${baseId}-to`}
+            type="date"
+            value={range.to}
+            min={range.from || undefined}
+            onChange={(e) => setRange(prev => ({ ...prev, to: e.target.value }))}
+          />
+        </div>
+        <button
+          type="button"
+          className="analytics-export-btn"
+          onClick={handleExportCsv}
+        >
+          ⬇️ Download CSV
+        </button>
+        <button
+          type="button"
+          className="analytics-reset-btn"
+          onClick={() => setRange({ from: '', to: '' })}
+          disabled={isRangeEmpty}
+        >
+          Reset
+        </button>
+      </div>
+    );
+  };
+
   const renderAnalyticsTable = () => {
     if (!isDataLoaded) {
       return (
@@ -447,6 +675,54 @@ const AdminAnalytics = () => {
 
     if (!rows.length) {
       return <div className="analytics-empty">{activeConfig.empty}</div>;
+    }
+
+    if (analyticsTab === 'analytics') {
+      return (
+        <div className="analytics-analytics-view">
+          {barChartData && doughnutData ? (
+            <div className="analytics-charts">
+              <div className="chart-card">
+                <div className="chart-card-header">
+                  <h3>System Totals</h3>
+                  <p>Current counts across major PESDO metrics.</p>
+                </div>
+                <div className="chart-canvas">
+                  <Bar data={barChartData} options={barChartOptions} />
+                </div>
+              </div>
+              <div className="chart-card">
+                <div className="chart-card-header">
+                  <h3>Engagement Snapshot</h3>
+                  <p>Placements, referrals, and employer participation.</p>
+                </div>
+                <div className="chart-canvas">
+                  <Doughnut data={doughnutData} options={doughnutOptions} />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <table className="analytics-table analytics-table--compact">
+            <thead>
+              <tr>
+                {activeConfig.columns.map(col => (
+                  <th key={col.header}>{col.header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(item => (
+                <tr key={item.id || item.metric}>
+                  {activeConfig.columns.map(col => (
+                    <td key={col.header}>{col.accessor(item)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
     }
 
     return (
@@ -532,64 +808,7 @@ const AdminAnalytics = () => {
           <div className="analytics-tab-description">
             {analyticsConfig[analyticsTab].description}
           </div>
-          {(analyticsTab === 'jobseekers' || analyticsTab === 'employers' || analyticsTab === 'vacancies') && (
-            <div className="analytics-filters">
-              <div className="date-filter-group">
-                <label htmlFor="jobseeker-from">From</label>
-                <input
-                  id="jobseeker-from"
-                  type="date"
-                  value={analyticsTab === 'jobseekers' ? jobseekerDateRange.from : employerDateRange.from}
-                  onChange={(e) => {
-                    if (analyticsTab === 'jobseekers') {
-                      setJobseekerDateRange(prev => ({ ...prev, from: e.target.value }));
-                    } else {
-                      setEmployerDateRange(prev => ({ ...prev, from: e.target.value }));
-                    }
-                  }}
-                />
-              </div>
-              <div className="date-filter-group">
-                <label htmlFor="jobseeker-to">To</label>
-                <input
-                  id="jobseeker-to"
-                  type="date"
-                  value={analyticsTab === 'jobseekers' ? jobseekerDateRange.to : employerDateRange.to}
-                  onChange={(e) => {
-                    if (analyticsTab === 'jobseekers') {
-                      setJobseekerDateRange(prev => ({ ...prev, to: e.target.value }));
-                    } else {
-                      setEmployerDateRange(prev => ({ ...prev, to: e.target.value }));
-                    }
-                  }}
-                  min={(analyticsTab === 'jobseekers' ? jobseekerDateRange.from : employerDateRange.from) || undefined}
-                />
-              </div>
-              <button
-                type="button"
-                className="analytics-export-btn"
-                onClick={handleExportCsv}
-              >
-                ⬇️ Download CSV
-              </button>
-              <button
-                type="button"
-                className="analytics-reset-btn"
-                onClick={() => {
-                  if (analyticsTab === 'jobseekers') {
-                    setJobseekerDateRange({ from: '', to: '' });
-                  } else {
-                    setEmployerDateRange({ from: '', to: '' });
-                  }
-                }}
-                disabled={analyticsTab === 'jobseekers'
-                  ? !jobseekerDateRange.from && !jobseekerDateRange.to
-                  : !employerDateRange.from && !employerDateRange.to}
-              >
-                Reset
-              </button>
-            </div>
-          )}
+          {renderDateFilters()}
           <div className="analytics-table-wrapper">
             <div className="analytics-table-container">
               {renderAnalyticsTable()}

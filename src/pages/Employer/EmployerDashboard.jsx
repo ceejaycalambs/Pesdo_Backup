@@ -179,6 +179,29 @@ const EmployerDashboard = () => {
   const [selectedApplicationProfile, setSelectedApplicationProfile] = useState(null);
   const [loadingApplicationProfile, setLoadingApplicationProfile] = useState(false);
 
+  const extractStoragePathFromUrl = (publicUrl) => {
+    if (!publicUrl) return null;
+    try {
+      const url = new URL(publicUrl);
+      const marker = '/object/public/files/';
+      const index = url.pathname.indexOf(marker);
+      if (index === -1) return null;
+      return decodeURIComponent(url.pathname.slice(index + marker.length));
+    } catch (error) {
+      console.warn('Unable to parse storage URL:', publicUrl, error);
+      return null;
+    }
+  };
+
+  const deleteStorageFile = async (publicUrl) => {
+    const storagePath = extractStoragePathFromUrl(publicUrl);
+    if (!storagePath) return;
+    const { error } = await supabase.storage.from('files').remove([storagePath]);
+    if (error) {
+      console.warn('Failed to remove storage object:', storagePath, error);
+    }
+  };
+
   useEffect(() => {
     if (!employerId) return;
     fetchProfile();
@@ -408,6 +431,11 @@ const EmployerDashboard = () => {
     setDocumentFeedback(type, { uploading: true, success: '', error: '' });
 
     try {
+      const currentUrl = profile?.[config.column];
+      if (currentUrl) {
+        await deleteStorageFile(currentUrl);
+      }
+
       const { error } = await supabase
         .from('employer_profiles')
         .update({ [config.column]: null, updated_at: new Date().toISOString() })
@@ -460,6 +488,11 @@ const EmployerDashboard = () => {
     const filePath = `${config.folder}/${employerId}-${Date.now()}.${extension}`;
 
     try {
+      const currentUrl = profile?.[config.column];
+      if (currentUrl) {
+        await deleteStorageFile(currentUrl);
+      }
+
       const { error: uploadError } = await supabase.storage
         .from('files')
         .upload(filePath, file, {

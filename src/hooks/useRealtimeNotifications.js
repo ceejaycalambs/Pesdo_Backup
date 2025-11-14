@@ -90,25 +90,84 @@ export const useRealtimeNotifications = (userId, userType) => {
 
       if (userType === 'jobseeker') {
         // Jobseekers: Get notifications about their applications
-        const { data, error } = await supabase
+        const {
+          data: applicationRows,
+          error: applicationsError
+        } = await supabase
           .from('applications')
-          .select(`
-            *,
-            jobs (
-              *,
-              employer_profiles (
-                business_name
-              )
-            )
-          `)
+          .select('*')
           .eq('jobseeker_id', userId)
           .order('updated_at', { ascending: false })
           .limit(50);
 
-        if (error) {
-          console.error('Error fetching jobseeker notifications from database:', error);
-        } else if (data) {
-          combinedData = combinedData.concat(data.map(item => ({ ...item, __source: 'application' })));
+        if (applicationsError) {
+          console.error('Error fetching jobseeker notifications from database:', applicationsError);
+        } else if (applicationRows && applicationRows.length > 0) {
+          const jobIds = Array.from(
+            new Set(applicationRows.map((row) => row.job_id).filter(Boolean))
+          );
+
+          const jobMap = new Map();
+          const employerMap = new Map();
+
+          if (jobIds.length > 0) {
+            const {
+              data: jobsData,
+              error: jobsError
+            } = await supabase
+              .from('jobs')
+              .select('id, employer_id, position_title, salary_range, nature_of_work, vacancy_count, job_description, place_of_work')
+              .in('id', jobIds);
+
+            if (jobsError) {
+              console.error('Error fetching jobs for jobseeker notifications:', jobsError);
+            } else if (jobsData) {
+              jobsData.forEach((job) => {
+                jobMap.set(job.id, job);
+              });
+
+              const employerIds = Array.from(
+                new Set(jobsData.map((job) => job.employer_id).filter(Boolean))
+              );
+
+              if (employerIds.length > 0) {
+                const {
+                  data: employersData,
+                  error: employersError
+                } = await supabase
+                  .from('employer_profiles')
+                  .select('id, business_name')
+                  .in('id', employerIds);
+
+                if (employersError) {
+                  console.error('Error fetching employer profiles for jobseeker notifications:', employersError);
+                } else if (employersData) {
+                  employersData.forEach((employer) => {
+                    employerMap.set(employer.id, employer);
+                  });
+                }
+              }
+            }
+          }
+
+          const enrichedApplications = applicationRows.map((application) => {
+            const jobInfo = application.job_id ? jobMap.get(application.job_id) : null;
+            const employerInfo = jobInfo?.employer_id ? employerMap.get(jobInfo.employer_id) : null;
+
+            return {
+              ...application,
+              jobs: jobInfo
+                ? {
+                    ...jobInfo,
+                    employer_business_name: employerInfo?.business_name || null
+                  }
+                : null
+            };
+          });
+
+          combinedData = combinedData.concat(
+            enrichedApplications.map((item) => ({ ...item, __source: 'application' }))
+          );
         }
       } else if (userType === 'employer') {
         // Employers: Get notifications about new applications to their jobs
@@ -423,17 +482,35 @@ export const useRealtimeNotifications = (userId, userType) => {
 
       if (userType === 'jobseeker' && payload.new.job_id) {
         // Fetch job and employer details for jobseekers
-        const { data: jobData } = await supabase
+        let jobData = null;
+        let employerData = null;
+
+        const { data: jobRow, error: jobError } = await supabase
           .from('jobs')
-          .select('*, employer_profiles ( business_name )')
+          .select('id, employer_id, position_title, salary_range, nature_of_work, vacancy_count, job_description, place_of_work')
           .eq('id', payload.new.job_id)
           .single();
+
+        if (!jobError && jobRow) {
+          jobData = jobRow;
+          if (jobRow.employer_id) {
+            const { data: employerRow, error: employerError } = await supabase
+              .from('employer_profiles')
+              .select('id, business_name')
+              .eq('id', jobRow.employer_id)
+              .single();
+            if (!employerError && employerRow) {
+              employerData = employerRow;
+            }
+          }
+        }
+
         if (jobData) {
           enrichedData = {
             ...payload.new,
             jobs: {
               ...jobData,
-              employer_business_name: jobData.employer_profiles?.business_name || jobData.business_name || null
+              employer_business_name: employerData?.business_name || null
             }
           };
         }
