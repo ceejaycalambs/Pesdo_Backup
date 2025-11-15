@@ -218,7 +218,7 @@ const AdminManagement = () => {
       if (emailConfirmed) {
         setSuccess(`✅ Admin account created successfully! Email: ${formData.email}. The admin can now log in immediately.`);
       } else {
-        setSuccess(`✅ Admin account created successfully! Email: ${formData.email}. IMPORTANT: The admin must confirm their email before logging in. Please go to Supabase Dashboard > Authentication > Users, find the user, and click "Confirm Email" or disable email confirmation in Settings > Auth > Email Auth.`);
+        setSuccess(`✅ Admin account created successfully! Email: ${formData.email}.`);
       }
       setFormData({
         email: '',

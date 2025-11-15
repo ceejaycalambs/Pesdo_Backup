@@ -1,89 +1,175 @@
 import React, { useEffect, useState } from 'react';
 import './LandingPage.css';
-import Pesdo_Office from '../assets/Pesdo_Office.png';
 import Logo_pesdo from '../assets/Logo_pesdo.png';
+import Pesdo_Office from '../assets/Pesdo_Office.png';
 import { Link } from 'react-router-dom';
-import AOS from 'aos';
-import 'aos/dist/aos.css';
 import { supabase } from '../supabase';
 
 const LandingPage = () => {
-    const [showScroll, setShowScroll] = useState(false);
-    const [footerVisible, setFooterVisible] = useState(false);
     const [headerScrolled, setHeaderScrolled] = useState(false);
-    const [stats, setStats] = useState({ jobseekers: 0, employers: 0, openJobs: 0 });
-    const [recentJobs, setRecentJobs] = useState([]);
+    const [stats, setStats] = useState({
+        jobseekers: 0,
+        employers: 0,
+        vacancies: 0,
+        referrals: 0,
+        placements: 0
+    });
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [employers, setEmployers] = useState([]);
+    const [loadingEmployers, setLoadingEmployers] = useState(true);
 
     useEffect(() => {
-        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        AOS.init({
-            duration: prefersReducedMotion ? 0 : 1000,
-            once: false,
-            mirror: true,
-            disable: prefersReducedMotion
-        });
-
         const handleScroll = () => {
-            setShowScroll(window.scrollY > 300);
             setHeaderScrolled(window.scrollY > 10);
-
-            // Update footer visibility hint (kept for fade effect if needed)
-            if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 50) {
-                setFooterVisible(true);
-            } else {
-                setFooterVisible(false);
-            }
         };
 
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Fetch data from Supabase
     useEffect(() => {
-        const fetchData = async () => {
+        const fetchStats = async () => {
             try {
                 setLoading(true);
-                // Get stats and recent jobs
-                const { data: users } = await supabase.from('jobseeker_profiles').select('id');
-                const { data: jobs } = await supabase.from('jobs').select('id');
-                const { data: jobsData } = await supabase
-                  .from('jobs')
-                  .select('*')
-                  .order('created_at', { ascending: false })
-                  .limit(3);
+                
+                // Try using RPC function first (if it exists)
+                const { data: rpcData, error: rpcError } = await supabase
+                    .rpc('get_public_stats');
+                
+                if (!rpcError && rpcData) {
+                    console.log('Stats from RPC function:', rpcData);
+                    setStats({
+                        jobseekers: rpcData.jobseekers || 0,
+                        employers: rpcData.employers || 0,
+                        vacancies: rpcData.vacancies || 0,
+                        referrals: rpcData.referrals || 0,
+                        placements: rpcData.placements || 0
+                    });
+                    setLoading(false);
+                    return;
+                }
+                
+                // Fallback: Try direct queries (may fail due to RLS)
+                console.log('RPC function not available, trying direct queries...');
+                
+                // Fetch jobseekers
+                const { data: jobseekerProfiles, error: jobseekerError } = await supabase
+                    .from('jobseeker_profiles')
+                    .select('id');
+                
+                console.log('Jobseekers query result:', { 
+                    count: jobseekerProfiles?.length || 0, 
+                    error: jobseekerError 
+                });
+                
+                // Fetch employers
+                const { data: employerProfiles, error: employerError } = await supabase
+                    .from('employer_profiles')
+                    .select('id');
+                
+                console.log('Employers query result:', { 
+                    count: employerProfiles?.length || 0, 
+                    error: employerError 
+                });
+                
+                // Fetch approved jobs (Vacancies Solicited)
+                const { data: jobs, error: jobsError } = await supabase
+                    .from('jobs')
+                    .select('id')
+                    .eq('status', 'approved');
+                
+                console.log('Jobs query result:', { 
+                    count: jobs?.length || 0, 
+                    error: jobsError 
+                });
+                
+                // Fetch applications for referrals and placements
+                const { data: applications, error: applicationsError } = await supabase
+                    .from('applications')
+                    .select('id, status');
+                
+                console.log('Applications query result:', { 
+                    count: applications?.length || 0, 
+                    error: applicationsError 
+                });
+                
+                // Calculate referrals (status = 'referred')
+                const referralStatuses = new Set(['referred']);
+                const referralsCount = (applications || []).filter(app => 
+                    referralStatuses.has((app.status || '').toLowerCase())
+                ).length;
+                
+                // Calculate placements (status = 'accepted', 'hired', or 'placed')
+                const placementStatuses = new Set(['accepted', 'hired', 'placed']);
+                const placementsCount = (applications || []).filter(app => 
+                    placementStatuses.has((app.status || '').toLowerCase())
+                ).length;
                 
                 const statsData = {
-                  jobseekers: users?.length || 0,
-                  employers: 0,
-                  openJobs: jobs?.length || 0
+                    jobseekers: jobseekerProfiles?.length || 0,
+                    employers: employerProfiles?.length || 0,
+                    vacancies: jobs?.length || 0,
+                    referrals: referralsCount,
+                    placements: placementsCount
                 };
                 
+                console.log('Final stats data:', statsData);
+                
                 setStats(statsData);
-                setRecentJobs(jobsData);
-                setError(null);
-            } catch (err) {
-                console.error('Failed to fetch data:', err);
-                setError('Failed to load data. Please try again later.');
-                // Fallback to static data
-                setStats({ jobseekers: 8500, employers: 120, openJobs: 300 });
+            } catch (error) {
+                console.error('Error fetching statistics:', error);
             } finally {
                 setLoading(false);
             }
         };
-
-        fetchData();
+        
+        fetchStats();
     }, []);
 
-    const scrollTop = () => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
+    useEffect(() => {
+        const fetchEmployers = async () => {
+            try {
+                setLoadingEmployers(true);
+                
+                // Try using RPC function first (if it exists)
+                const { data: rpcData, error: rpcError } = await supabase
+                    .rpc('get_public_employers');
+                
+                if (!rpcError && rpcData) {
+                    console.log('Employers from RPC function:', rpcData?.length || 0, rpcData);
+                    setEmployers(rpcData || []);
+                    setLoadingEmployers(false);
+                    return;
+                }
+                
+                // Fallback to direct query
+                console.log('RPC function not available, using direct query');
+                const { data, error } = await supabase
+                    .from('employer_profiles')
+                    .select('id, business_name, company_logo_url, acronym')
+                    .eq('verification_status', 'approved')
+                    .order('business_name', { ascending: true })
+                    .limit(50);
+                
+                if (error) {
+                    console.error('Error fetching employers:', error);
+                    console.error('Error details:', error);
+                } else {
+                    console.log('Fetched employers:', data?.length || 0, data);
+                    setEmployers(data || []);
+                }
+                setLoadingEmployers(false);
+            } catch (error) {
+                console.error('Error fetching employers:', error);
+                setLoadingEmployers(false);
+            }
+        };
+        
+        fetchEmployers();
+    }, []);
 
     return (
         <div className="landing-page">
-            <a href="#main" className="skip-link">Skip to main content</a>
             {/* Fixed Navigation */}
             <header className={`header ${headerScrolled ? 'scrolled' : ''}`} role="banner" aria-label="Primary header">
                 <div className="header-brand">
@@ -121,191 +207,145 @@ const LandingPage = () => {
                 </nav>
             </header>
 
-            <main id="main">
-                {/* Hero Section - Full Width with Background */}
-                <section
-                    className="hero"
-                    style={{
-                        backgroundImage: `url(${Pesdo_Office})`
-                    }}
-                    aria-label="Hero"
-                >
-                    <div className="hero-overlay"></div>
-                    <div className="hero-container">
-                        <div className="hero-content" data-aos="fade-up">
-                            <h2>Your Gateway to Employment in Surigao City</h2>
-                            <p>Connecting job seekers with the right opportunities. Join thousands who have found their dream jobs through PESDO.</p>
-                            <div className="hero-cta">
-                                <Link className="btn btn-accent" to="/register" aria-label="Register as a new user">Get Started</Link>
-                                <div className="login-options">
-                                    <Link className="btn btn-light" to="/login/jobseeker" aria-label="Login as jobseeker">
-                                        <span className="btn-icon">👤</span>
-                                        <span className="btn-text">Jobseeker Login</span>
-                                    </Link>
-                                    <Link className="btn btn-light" to="/login/employer" aria-label="Login as employer">
-                                        <span className="btn-icon">🏢</span>
-                                        <span className="btn-text">Employer Login</span>
-                                    </Link>
-                                </div>
-                            </div>
-                        </div>
+            {/* Your new design content goes here */}
+            <main 
+                id="main" 
+                className="main-content"
+                style={{
+                    paddingTop: '100px'
+                }}
+            >
+                {/* Welcome Section */}
+                <section className="welcome-section">
+                    <div 
+                        className="welcome-section-background"
+                        style={{
+                            backgroundImage: `url(${Pesdo_Office})`
+                        }}
+                    ></div>
+                    <div className="welcome-content">
+                        <h2>Welcome to PESDO</h2>
+                        <p>Your gateway to employment opportunities in Surigao City. Connect jobseekers with employers and build your career or grow your business.</p>
                     </div>
-                    <a className="scroll-down" href="#features" aria-label="Scroll to features">↓</a>
                 </section>
 
-                {/* Stats Section - First after hero */}
-                <section className="stats-section" aria-label="Key statistics" data-aos="fade-up">
+                {/* Statistics Section */}
+                <section className="stats-section">
                     <div className="stats-container">
-                        {loading ? (
-                            <div className="stats-loading">Loading statistics...</div>
-                        ) : error ? (
-                            <div className="stats-error">{error}</div>
-                        ) : (
-                            <>
-                                <div className="stat-card" aria-label="Registered jobseekers">
-                                    <div className="stat-number">{stats.jobseekers.toLocaleString()}+</div>
-                                    <div className="stat-label">Jobseekers</div>
+                        <h2 className="stats-section-title">Job Portal Statistics</h2>
+                        <div className="stats-cards">
+                            <div className="stat-card stat-card-1">
+                                <span className="stat-icon">👥</span>
+                                <div className="stat-content">
+                                    <div className="stat-label">Registered Jobseekers</div>
+                                    <div className="stat-number">
+                                        {loading ? '...' : stats.jobseekers}
+                                    </div>
                                 </div>
-                                <div className="stat-card" aria-label="Active employers">
-                                    <div className="stat-number">{stats.employers.toLocaleString()}+</div>
-                                    <div className="stat-label">Employers</div>
+                            </div>
+                            <div className="stat-card stat-card-2">
+                                <span className="stat-icon">🏢</span>
+                                <div className="stat-content">
+                                    <div className="stat-label">Registered Employers</div>
+                                    <div className="stat-number">
+                                        {loading ? '...' : stats.employers}
+                                    </div>
                                 </div>
-                                <div className="stat-card" aria-label="Open job postings">
-                                    <div className="stat-number">{stats.openJobs.toLocaleString()}+</div>
-                                    <div className="stat-label">Open Jobs</div>
+                            </div>
+                            <div className="stat-card stat-card-3">
+                                <span className="stat-icon">💼</span>
+                                <div className="stat-content">
+                                    <div className="stat-label">Vacancies Solicited</div>
+                                    <div className="stat-number">
+                                        {loading ? '...' : stats.vacancies}
+                                    </div>
                                 </div>
-                            </>
-                        )}
-                    </div>
-                </section>
-
-                {/* Features Section */}
-                <section id="features" className="features-section" aria-label="Services" data-aos="fade-up">
-                    <div className="section-container">
-                        <h2 className="section-title">Our Services</h2>
-                        <p className="section-subtitle">Everything you need to find the perfect job or the perfect candidate</p>
-                        <div className="features-grid">
-                            <div className="feature-card" data-aos="fade-up">
-                                <div className="feature-icon">📝</div>
-                                <h3 className="feature-title">Jobseekers Registration</h3>
-                                <p className="feature-desc">Sign up and create your profile to start applying for jobs.</p>
                             </div>
-                            <div className="feature-card" data-aos="fade-up" data-aos-delay="100">
-                                <div className="feature-icon">🔎</div>
-                                <h3 className="feature-title">Job Vacancies Listing</h3>
-                                <p className="feature-desc">Browse verified, up-to-date postings tailored to your skills.</p>
+                            <div className="stat-card stat-card-4">
+                                <span className="stat-icon">📋</span>
+                                <div className="stat-content">
+                                    <div className="stat-label">Referrals</div>
+                                    <div className="stat-number">
+                                        {loading ? '...' : stats.referrals}
+                                    </div>
+                                </div>
                             </div>
-                            <div className="feature-card" data-aos="fade-up" data-aos-delay="200">
-                                <div className="feature-icon">🤝</div>
-                                <h3 className="feature-title">Referrals & Matching</h3>
-                                <p className="feature-desc">Get matched with roles and referred by our PESDO network.</p>
-                            </div>
-                            <div className="feature-card" data-aos="fade-up" data-aos-delay="300">
-                                <div className="feature-icon">📊</div>
-                                <h3 className="feature-title">Employment Reports</h3>
-                                <p className="feature-desc">Access employment trends and reports for informed decisions.</p>
+                            <div className="stat-card stat-card-5 stat-card-active">
+                                <span className="stat-icon">✅</span>
+                                <div className="stat-content">
+                                    <div className="stat-label">Job Placements</div>
+                                    <div className="stat-number">
+                                        {loading ? '...' : stats.placements}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                {/* How It Works */}
-                <section id="how-it-works" className="how-it-works-section" aria-label="How it works" data-aos="fade-up">
-                    <div className="section-container">
-                        <h2 className="section-title">How It Works</h2>
-                        <p className="section-subtitle">Simple steps to get you started on your employment journey</p>
-                        <div className="steps-grid">
-                            <div className="step-card" data-aos="fade-up">
-                                <div className="step-number">1</div>
-                                <h3 className="step-title">Create your profile</h3>
-                                <p className="step-desc">Register and complete your details to be visible to employers.</p>
-                            </div>
-                            <div className="step-card" data-aos="fade-up" data-aos-delay="100">
-                                <div className="step-number">2</div>
-                                <h3 className="step-title">Explore job listings</h3>
-                                <p className="step-desc">Browse curated vacancies matched to your skills and interests.</p>
-                            </div>
-                            <div className="step-card" data-aos="fade-up" data-aos-delay="200">
-                                <div className="step-number">3</div>
-                                <h3 className="step-title">Get referred and hired</h3>
-                                <p className="step-desc">We facilitate referrals and job matching to accelerate hiring.</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Recent Jobs Preview */}
-                {recentJobs.length > 0 && (
-                    <section className="jobs-section" aria-label="Recent job opportunities" data-aos="fade-up">
-                        <div className="section-container">
-                            <h2 className="section-title">Latest Opportunities</h2>
-                            <p className="section-subtitle">Discover the newest job openings in Surigao City</p>
-                            <div className="jobs-grid">
-                                {recentJobs.map((job) => (
-                                    <div key={job.id} className="job-card" data-aos="fade-up">
-                                        <h3 className="job-title">{job.position_title || job.title}</h3>
-                                        <p className="job-company">{job.company_name || 'Company'}</p>
-                                        <p className="job-location">{job.place_of_work || job.location || 'Location TBD'}</p>
-                                        <p className="job-salary">{job.salary_range || 'Salary negotiable'}</p>
+                {/* Registered Employers Section */}
+                <section className="employers-section">
+                    <div className="employers-container">
+                        <h2 className="employers-section-title">REGISTERED EMPLOYERS</h2>
+                        {loadingEmployers ? (
+                            <div className="employers-loading">Loading employers...</div>
+                        ) : employers.length > 0 ? (
+                            <div className="employers-grid">
+                                {employers.map((employer) => (
+                                    <div key={employer.id} className="employer-logo-card">
+                                        {employer.company_logo_url ? (
+                                            <img 
+                                                src={employer.company_logo_url} 
+                                                alt={employer.business_name || employer.acronym || 'Company Logo'}
+                                                className="employer-logo"
+                                                onError={(e) => {
+                                                    e.target.style.display = 'none';
+                                                    e.target.nextSibling.style.display = 'flex';
+                                                }}
+                                            />
+                                        ) : null}
+                                        <div 
+                                            className="employer-logo-placeholder"
+                                            style={{ display: employer.company_logo_url ? 'none' : 'flex' }}
+                                        >
+                                            {employer.acronym || (employer.business_name ? employer.business_name.substring(0, 2).toUpperCase() : 'CO')}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
-                            <div className="jobs-cta">
-                                <Link to="/jobseeker" className="btn btn-primary">View All Jobs</Link>
-                            </div>
-                        </div>
-                    </section>
-                )}
-
-                {/* Partners */}
-                <section className="partners-section" aria-label="Partner organizations" data-aos="fade-up">
-                    <div className="partners-container">
-                        <span className="partners-label">Trusted by</span>
-                        <div className="partners-list">
-                            <span className="partner-badge">PESDO</span>
-                            <span className="partner-badge">LGU Surigao</span>
-                            <span className="partner-badge">DOLE</span>
-                            <span className="partner-badge">TESDA</span>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Final CTA */}
-                <section className="cta-section" aria-label="Get started" data-aos="fade-up">
-                    <div className="cta-container">
-                        <h2 className="cta-title">Ready to take the next step?</h2>
-                        <p className="cta-subtitle">Create your account or log in to continue your employment journey</p>
-                        <div className="cta-actions">
-                            <Link className="btn btn-accent-large" to="/register">Create free account</Link>
-                            <div className="cta-login-options">
-                                <Link className="btn btn-outline-light" to="/login/jobseeker">
-                                    <span className="btn-icon">👤</span>
-                                    <span>Jobseeker Login</span>
-                                </Link>
-                                <Link className="btn btn-outline-light" to="/login/employer">
-                                    <span className="btn-icon">🏢</span>
-                                    <span>Employer Login</span>
-                                </Link>
-                            </div>
-                        </div>
+                        ) : (
+                            <div className="employers-empty">No registered employers yet.</div>
+                        )}
                     </div>
                 </section>
             </main>
 
             {/* Footer */}
-            <footer
-                className={`footer ${footerVisible ? 'fade-in' : 'fade-out'}`}
-                data-aos="fade-up"
-            >
-                <p>© 2025 PESDO Surigao City | Contact: peso_surigao@yahoo.com</p>
+            <footer className="landing-footer">
+                <div className="footer-content">
+                    <div className="footer-section">
+                        <h3>PESDO Web Portal</h3>
+                        <p>Connecting jobseekers with employers in Surigao City</p>
+                    </div>
+                    <div className="footer-section">
+                        <h4>Quick Links</h4>
+                        <ul>
+                            <li><Link to="/">Home</Link></li>
+                            <li><Link to="/jobseeker/login">Jobseeker Login</Link></li>
+                            <li><Link to="/employer/login">Employer Login</Link></li>
+                            <li><Link to="/admin/login">Admin Login</Link></li>
+                        </ul>
+                    </div>
+                    <div className="footer-section">
+                        <h4>Contact</h4>
+                        <p>Public Employment Service Office</p>
+                        <p>Surigao City, Philippines</p>
+                    </div>
+                </div>
+                <div className="footer-bottom">
+                    <p>&copy; {new Date().getFullYear()} PESDO Web Portal. All rights reserved.</p>
+                </div>
             </footer>
-
-            {/* Scroll-to-Top Button */}
-            {showScroll && (
-                <button className="scroll-top" onClick={scrollTop} aria-label="Scroll back to top">
-                    ↑
-                </button>
-            )}
         </div>
     );
 };

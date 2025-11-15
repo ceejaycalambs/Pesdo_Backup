@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext.jsx';
 import { supabase } from '../../supabase.js';
 import NotificationButton from '../../components/NotificationButton';
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
+import { logActivity } from '../../utils/activityLogger';
 import './JobseekerDashboard.css';
 
 const NAV_ITEMS = [
@@ -746,6 +747,21 @@ const JobseekerDashboard = () => {
         text: 'Profile updated successfully.'
       });
       setIsEditingProfile(false);
+
+      // Log activity
+      if (currentUser?.id) {
+        await logActivity({
+          userId: currentUser.id,
+          userType: 'jobseeker',
+          actionType: 'profile_updated',
+          actionDescription: 'Updated jobseeker profile information',
+          entityType: 'profile',
+          entityId: jobseekerId,
+          metadata: {
+            updatedFields: Object.keys(payload)
+          }
+        });
+      }
     } catch (error) {
       console.error('Failed to update profile:', error);
       setProfileMessage({
@@ -1125,6 +1141,23 @@ const JobseekerDashboard = () => {
 
       const inserted = Array.isArray(data) ? data[0] : data;
       const appliedAt = inserted?.applied_at || inserted?.created_at || timestamp;
+
+      // Log activity
+      if (currentUser?.id) {
+        await logActivity({
+          userId: currentUser.id,
+          userType: 'jobseeker',
+          actionType: 'job_applied',
+          actionDescription: `Applied to job: ${selectedJob.title || selectedJob.position_title || 'Job Vacancy'}`,
+          entityType: 'application',
+          entityId: inserted?.id,
+          metadata: {
+            jobId: selectedJob.id,
+            jobTitle: selectedJob.title || selectedJob.position_title,
+            employerId: selectedJob.employer_id
+          }
+        });
+      }
 
       const normalizedApplication = {
         id: inserted?.id,

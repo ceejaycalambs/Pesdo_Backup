@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase.js';
+import { logActivity } from '../../utils/activityLogger';
+import { useAuth } from '../../contexts/AuthContext';
 import './JobManagement.css';
 
 const JobManagement = () => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState('pending');
   const [pendingJobs, setPendingJobs] = useState([]);
   const [approvedJobs, setApprovedJobs] = useState([]);
@@ -13,10 +16,33 @@ const JobManagement = () => {
   const [error, setError] = useState(null);
   const [selectedJob, setSelectedJob] = useState(null);
   const [showJobModal, setShowJobModal] = useState(false);
+  const [adminRole, setAdminRole] = useState(null);
 
   useEffect(() => {
     fetchJobs();
+    fetchAdminRole();
   }, []);
+
+  const fetchAdminRole = async () => {
+    if (currentUser?.id) {
+      try {
+        const { data: adminProfile, error } = await supabase
+          .from('admin_profiles')
+          .select('role')
+          .eq('id', currentUser.id)
+          .single();
+        
+        if (!error && adminProfile) {
+          setAdminRole(adminProfile.role || 'admin');
+        } else {
+          setAdminRole('admin');
+        }
+      } catch (error) {
+        console.error('Error fetching admin role:', error);
+        setAdminRole('admin');
+      }
+    }
+  };
 
   const fetchJobs = async () => {
     try {
@@ -247,6 +273,23 @@ const JobManagement = () => {
             : `Your job vacancy for "${pendingJob.position_title}" has been rejected. Please review the requirements and submit again.`
         }
       ]);
+
+      // Log activity
+      if (currentUser?.id) {
+        await logActivity({
+          userId: currentUser.id,
+          userType: adminRole === 'super_admin' ? 'super_admin' : 'admin',
+          actionType: 'job_rejected',
+          actionDescription: `Rejected job vacancy: ${pendingJob.position_title}`,
+          entityType: 'job',
+          entityId: pendingJob.id,
+          metadata: {
+            jobTitle: pendingJob.position_title,
+            employerId: pendingJob.employer_id,
+            rejectionReason: customReason
+          }
+        });
+      }
 
       fetchJobs();
     } catch (err) {

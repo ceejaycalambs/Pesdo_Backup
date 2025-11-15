@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase.js';
+import { logActivity } from '../../utils/activityLogger';
+import { useAuth } from '../../contexts/AuthContext';
 import './EmployerVerification.css';
 
 const EmployerVerificationSimple = () => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [employers, setEmployers] = useState([]);
+  const [filteredEmployers, setFilteredEmployers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedEmployer, setSelectedEmployer] = useState(null);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
@@ -13,6 +17,8 @@ const EmployerVerificationSimple = () => {
   const [verificationStatus, setVerificationStatus] = useState('pending');
   const [isUpdating, setIsUpdating] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [adminRole, setAdminRole] = useState(null);
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -31,13 +37,15 @@ const EmployerVerificationSimple = () => {
 
       if (error) throw error;
       console.log('📊 Fetched employers:', data);
-      setEmployers(data || []);
+      const employersData = data || [];
+      setEmployers(employersData);
+      setFilteredEmployers(employersData);
       
       // Calculate stats - handle null verification_status
-      const total = data?.length || 0;
-      const pending = data?.filter(emp => !emp.verification_status || emp.verification_status === 'pending').length || 0;
-      const approved = data?.filter(emp => emp.verification_status === 'approved').length || 0;
-      const rejected = data?.filter(emp => emp.verification_status === 'rejected').length || 0;
+      const total = employersData.length;
+      const pending = employersData.filter(emp => !emp.verification_status || emp.verification_status === 'pending').length;
+      const approved = employersData.filter(emp => emp.verification_status === 'approved').length;
+      const rejected = employersData.filter(emp => emp.verification_status === 'rejected').length;
       
       setStats({ total, pending, approved, rejected });
     } catch (error) {
@@ -81,6 +89,33 @@ const EmployerVerificationSimple = () => {
       }
 
       console.log('✅ Update successful:', data);
+
+      // Log activity
+      if (currentUser?.id) {
+        const actionType = verificationStatus === 'approved' ? 'employer_verified' : 
+                          verificationStatus === 'rejected' ? 'employer_rejected' : 
+                          'employer_verification_updated';
+        const actionDescription = verificationStatus === 'approved' 
+          ? `Verified employer: ${selectedEmployer.business_name || selectedEmployer.email}`
+          : verificationStatus === 'rejected'
+          ? `Rejected employer verification: ${selectedEmployer.business_name || selectedEmployer.email}`
+          : `Updated employer verification status to ${verificationStatus}`;
+
+        await logActivity({
+          userId: currentUser.id,
+          userType: adminRole === 'super_admin' ? 'super_admin' : 'admin',
+          actionType: actionType,
+          actionDescription: actionDescription,
+          entityType: 'profile',
+          entityId: selectedEmployer.id,
+          metadata: {
+            employerId: selectedEmployer.id,
+            businessName: selectedEmployer.business_name,
+            verificationStatus: verificationStatus,
+            verificationNotes: verificationNotes
+          }
+        });
+      }
 
       // Create notification for employer about verification update
       if (verificationStatus === 'approved' || verificationStatus === 'rejected') {
@@ -158,6 +193,62 @@ const EmployerVerificationSimple = () => {
   useEffect(() => {
     fetchEmployers();
   }, []);
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchAdminRole();
+    }
+  }, [currentUser]);
+
+  const fetchAdminRole = async () => {
+    if (currentUser?.id) {
+      try {
+        const { data: adminProfile, error } = await supabase
+          .from('admin_profiles')
+          .select('role')
+          .eq('id', currentUser.id)
+          .single();
+        
+        if (!error && adminProfile) {
+          setAdminRole(adminProfile.role || 'admin');
+        } else {
+          setAdminRole('admin');
+        }
+      } catch (error) {
+        console.error('Error fetching admin role:', error);
+        setAdminRole('admin');
+      }
+    }
+  };
+
+  // Filter employers based on search term
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setFilteredEmployers(employers);
+      return;
+    }
+
+    const searchLower = searchTerm.toLowerCase().trim();
+    const filtered = employers.filter(employer => {
+      const businessName = (employer.business_name || '').toLowerCase();
+      const email = (employer.email || '').toLowerCase();
+      const contactPerson = (employer.contact_person_name || '').toLowerCase();
+      const acronym = (employer.acronym || '').toLowerCase();
+      const establishmentType = (employer.establishment_type || '').toLowerCase();
+      const contactEmail = (employer.contact_email || '').toLowerCase();
+      
+      return (
+        businessName.includes(searchLower) ||
+        email.includes(searchLower) ||
+        contactPerson.includes(searchLower) ||
+        acronym.includes(searchLower) ||
+        establishmentType.includes(searchLower) ||
+        contactEmail.includes(searchLower)
+      );
+    });
+
+    setFilteredEmployers(filtered);
+  }, [searchTerm, employers]);
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -251,9 +342,41 @@ const EmployerVerificationSimple = () => {
 
       {/* Employers List - Table View for Admin Efficiency */}
       <div className="employers-list">
-        <h2>Employers Awaiting Verification</h2>
+        <div className="employers-list-header">
+          <h2>Employers Awaiting Verification</h2>
+          <div className="search-container">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by business name, email, contact person..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button 
+                className="clear-search-btn"
+                onClick={() => setSearchTerm('')}
+                title="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
         
-        {employers.length === 0 ? (
+        {filteredEmployers.length === 0 && employers.length > 0 ? (
+          <div className="no-results">
+            <div className="no-results-icon">🔍</div>
+            <h3>No results found</h3>
+            <p>No employers match your search term "{searchTerm}"</p>
+            <button 
+              className="btn-secondary"
+              onClick={() => setSearchTerm('')}
+            >
+              Clear Search
+            </button>
+          </div>
+        ) : employers.length === 0 ? (
           <div className="no-employers">
             <div className="no-employers-icon">🎉</div>
             <h3>All caught up!</h3>
@@ -275,7 +398,7 @@ const EmployerVerificationSimple = () => {
                 </tr>
               </thead>
               <tbody>
-                {employers.map((employer) => (
+                {filteredEmployers.map((employer) => (
                   <tr key={employer.id} className="employer-row">
                     <td className="business-name">
                       <div className="business-info">

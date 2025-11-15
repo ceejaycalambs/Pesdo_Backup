@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabase.js';
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser: authUser, userData } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -23,6 +24,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     checkAdminAuth();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser, userData]);
 
   // Fetch dashboard data only when admin is authenticated
@@ -119,24 +121,32 @@ const AdminDashboard = () => {
         
         if (!profileError && adminProfile) {
           const role = adminProfile.role || 'admin';
+          console.log('✅ Admin role fetched from database:', role);
           setAdminRole(role);
           // Only update localStorage if it matches the current user's actual role
           localStorage.setItem('admin_role', role);
         } else {
           // Fallback to userData.role if database fetch fails
           const role = userData.role || 'admin';
+          console.log('⚠️ Using fallback role from userData:', role);
           setAdminRole(role);
           localStorage.setItem('admin_role', role);
         }
       } catch (error) {
-        console.error('Error fetching admin role:', error);
+        console.error('❌ Error fetching admin role:', error);
         // Fallback to userData.role
         const role = userData.role || 'admin';
+        console.log('⚠️ Using fallback role after error:', role);
         setAdminRole(role);
         localStorage.setItem('admin_role', role);
       }
       
       setLoading(false);
+      
+      // Log role after state update (will be in next render)
+      setTimeout(() => {
+        console.log('🔐 Admin authentication successful. Email:', authUser.email);
+      }, 100);
     } else {
       // Wait for auth to load
       setLoading(true);
@@ -146,7 +156,10 @@ const AdminDashboard = () => {
   const fetchDashboardData = async () => {
     try {
       console.log('🔍 Fetching dashboard data...');
+      console.log('👤 Admin Email:', adminEmail);
+      console.log('🔐 Admin Role:', adminRole);
       setIsDataLoaded(false);
+      setError('');
       
       // Check current user session
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -225,7 +238,10 @@ const AdminDashboard = () => {
 
       console.log('👥 All users:', allUsers);
       console.log('📊 Setting stats with totalUsers:', allUsers.length);
-      console.log('👥 Setting recent users:', allUsers.slice(0, 5));
+      
+      // Limit to exactly 5 most recent users
+      const limitedUsers = allUsers.slice(0, 5);
+      console.log('👥 Setting recent users:', limitedUsers);
 
       setStats({
         totalUsers: allUsers.length, // Use the actual displayed users count
@@ -235,7 +251,7 @@ const AdminDashboard = () => {
         totalApplications: applications?.length || 0
       });
 
-      setRecentUsers(allUsers.slice(0, 5));
+      setRecentUsers(limitedUsers);
       setError(''); // Clear any previous errors
       setIsDataLoaded(true);
     } catch (error) {
@@ -314,7 +330,9 @@ const AdminDashboard = () => {
     }
   };
 
-  if (loading) {
+  // Only show loading screen if we're still checking authentication
+  // Once we have adminEmail, show the dashboard even if data is still loading
+  if (loading && !adminEmail) {
     return (
       <div className="admin-dashboard">
         <div className="loading-screen">
@@ -325,28 +343,105 @@ const AdminDashboard = () => {
     );
   }
 
+  const navItems = [
+    { path: '/admin/dashboard', label: 'Dashboard', icon: '📊', exact: true },
+    { path: '/admin/users', label: 'User Management', icon: '👥' },
+    { path: '/admin/jobs', label: 'Manage Jobs', icon: '💼' },
+    { path: '/admin/verification', label: 'Employer Verification', icon: '🔍' },
+    { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
+  ];
+
+  const superAdminNavItems = [
+    { path: '/admin/logs', label: 'System Logs', icon: '📋' },
+    { path: '/admin/settings', label: 'Admin Management', icon: '⚙️' },
+  ];
+
+  const isActive = (path, exact = false, query = null) => {
+    const pathOnly = path.split('?')[0];
+    if (exact) {
+      return location.pathname === pathOnly && (!query || location.search.includes(query));
+    }
+    if (query) {
+      return location.pathname === pathOnly && location.search.includes(query);
+    }
+    // For dashboard, match exactly
+    if (pathOnly === '/admin/dashboard') {
+      return location.pathname === '/admin/dashboard';
+    }
+    return location.pathname.startsWith(pathOnly);
+  };
+
   return (
     <div className="admin-dashboard">
-      {/* Header */}
-      <header className="admin-dashboard-header">
-        <div className="header-content">
-          <div className="header-left">
-            <h1>Admin Dashboard</h1>
-            <p>Welcome back, {adminEmail}</p>
+      {/* Sidebar */}
+      <aside className="admin-sidebar">
+        <div className="sidebar-header">
+        </div>
+        <nav className="sidebar-nav">
+          <ul className="nav-list">
+            {navItems.map((item) => (
+              <li key={item.path}>
+                <button
+                  className={`nav-item ${isActive(item.path, item.exact, item.query) ? 'active' : ''}`}
+                  onClick={() => navigate(item.path)}
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  <span className="nav-label">{item.label}</span>
+                </button>
+              </li>
+            ))}
+            {adminRole === 'super_admin' && (
+              <>
+                <li className="nav-divider">
+                  <span>Super Admin</span>
+                </li>
+                {superAdminNavItems.map((item) => (
+                  <li key={item.path}>
+                    <button
+                      className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
+                      onClick={() => navigate(item.path)}
+                    >
+                      <span className="nav-icon">{item.icon}</span>
+                      <span className="nav-label">{item.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </>
+            )}
+          </ul>
+        </nav>
+        <div className="sidebar-footer">
+          <div className="user-info">
+            <p className="user-email">{adminEmail}</p>
+            <p className="user-role">{adminRole === 'super_admin' ? 'Super Admin' : 'Admin'}</p>
           </div>
-          <div className="header-right">
-            <button onClick={fetchDashboardData} className="refresh-btn">
-              🔄 Refresh
-            </button>
-            <button onClick={handleLogout} className="logout-btn">
-              🚪 Logout
-            </button>
+          <button onClick={handleLogout} className="sidebar-logout">
+            <span className="nav-icon">🚪</span>
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="admin-content-wrapper">
+        {/* Header */}
+        <header className="admin-dashboard-header">
+          <div className="header-content">
+            <div className="header-left">
+              <div>
+                <h1>Admin Dashboard</h1>
+              </div>
+            </div>
+            <div className="header-right">
+              <button onClick={fetchDashboardData} className="refresh-btn">
+                🔄 Refresh
+              </button>
             </div>
           </div>
         </header>
 
-      {/* Main Content */}
-      <main className="admin-dashboard-main">
+        {/* Main Content */}
+        <main className="admin-dashboard-main">
         {/* Error Message */}
         {error && (
           <div className="error-banner">
@@ -404,53 +499,8 @@ const AdminDashboard = () => {
                   <h2>Recent Users</h2>
                   {renderRecentUsers()}
           </div>
-
-        {/* Quick Actions */}
-        <div className="quick-actions-section">
-          <h2>Quick Actions</h2>
-          <div className="actions-grid">
-                    <button className="action-card" onClick={() => navigate('/admin/users')}>
-                      <div className="action-icon">👥</div>
-                      <h3>Manage Users</h3>
-                      <p>View and manage all user accounts</p>
-                    </button>
-            <button className="action-card" onClick={() => navigate('/admin/users?tab=employers')}>
-              <div className="action-icon">🏢</div>
-              <h3>Manage Employers</h3>
-              <p>View and manage employer accounts</p>
-            </button>
-            <button className="action-card" onClick={() => navigate('/admin/jobs')}>
-              <div className="action-icon">💼</div>
-              <h3>Manage Jobs</h3>
-              <p>View and manage job postings</p>
-            </button>
-            <button className="action-card" onClick={() => navigate('/admin/verification')}>
-              <div className="action-icon">🔍</div>
-              <h3>Employer Verification</h3>
-              <p>Review and verify employer documents</p>
-            </button>
-            <button className="action-card" onClick={() => navigate('/admin/analytics')}>
-              <div className="action-icon">📊</div>
-              <h3>Analytics</h3>
-              <p>View system analytics and reports</p>
-            </button>
-            {adminRole === 'super_admin' && (
-              <button className="action-card" onClick={() => navigate('/admin/logs')}>
-                <div className="action-icon">📋</div>
-                <h3>System Logs</h3>
-                <p>View activity and login logs</p>
-              </button>
-            )}
-            {adminRole === 'super_admin' && (
-              <button className="action-card" onClick={() => navigate('/admin/settings')}>
-                <div className="action-icon">⚙️</div>
-                <h3>Admin Management</h3>
-                <p>Manage admin accounts</p>
-              </button>
-            )}
-          </div>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 };

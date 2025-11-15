@@ -178,11 +178,15 @@ const SuperAdminLogs = () => {
   const getActionTypeLabel = (actionType) => {
     const labels = {
       'job_approved': 'Job Approved',
+      'job_rejected': 'Job Rejected',
       'jobseeker_referred': 'Jobseeker Referred',
       'profile_updated': 'Profile Updated',
       'job_applied': 'Job Applied',
       'application_accepted': 'Application Accepted',
-      'application_rejected': 'Application Rejected'
+      'application_rejected': 'Application Rejected',
+      'employer_verified': 'Employer Verified',
+      'employer_rejected': 'Employer Rejected',
+      'employer_verification_updated': 'Employer Verification Updated'
     };
     return labels[actionType] || actionType;
   };
@@ -253,11 +257,15 @@ const SuperAdminLogs = () => {
               >
                 <option value="all">All Actions</option>
                 <option value="job_approved">Job Approved</option>
+                <option value="job_rejected">Job Rejected</option>
                 <option value="jobseeker_referred">Jobseeker Referred</option>
                 <option value="profile_updated">Profile Updated</option>
                 <option value="job_applied">Job Applied</option>
                 <option value="application_accepted">Application Accepted</option>
                 <option value="application_rejected">Application Rejected</option>
+                <option value="employer_verified">Employer Verified</option>
+                <option value="employer_rejected">Employer Rejected</option>
+                <option value="employer_verification_updated">Employer Verification Updated</option>
               </select>
             </div>
           )}

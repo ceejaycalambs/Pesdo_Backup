@@ -3,6 +3,7 @@ import NotificationButton from '../../components/NotificationButton';
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { supabase } from '../../supabase.js';
+import { logActivity } from '../../utils/activityLogger';
 import './EmployerDashboard.css';
 
 const NAV_ITEMS = [
@@ -413,6 +414,22 @@ const EmployerDashboard = () => {
       setProfile((prev) => ({ ...prev, ...payload }));
       setProfileMessage({ type: 'success', text: 'Profile updated successfully.' });
       setIsEditingProfile(false);
+
+      // Log activity
+      if (currentUser?.id) {
+        await logActivity({
+          userId: currentUser.id,
+          userType: 'employer',
+          actionType: 'profile_updated',
+          actionDescription: 'Updated employer profile information',
+          entityType: 'profile',
+          entityId: employerId,
+          metadata: {
+            updatedFields: Object.keys(payload),
+            businessName: payload.business_name || profile?.business_name
+          }
+        });
+      }
     } catch (error) {
       console.error('Failed to update employer profile:', error);
       setProfileMessage({
