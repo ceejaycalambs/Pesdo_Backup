@@ -15,6 +15,8 @@ const UserManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [deleteConfirm, setDeleteConfirm] = useState({ show: false, userId: null, userType: null, userName: null });
+  const [deleteStatus, setDeleteStatus] = useState({ show: false, type: 'success', message: '', details: '', showCancel: false, onConfirm: null, onCancel: null });
 
   useEffect(() => {
     // Check URL parameter for tab
@@ -109,12 +111,75 @@ const UserManagement = () => {
     setSelectedUser(null);
   };
 
-  const handleDeleteUser = async (userId, userType) => {
-    if (!window.confirm(`Are you sure you want to delete this ${userType}? This action cannot be undone.`)) {
-      return;
-    }
+  const handleDeleteClick = (userId, userType, userName) => {
+    setDeleteConfirm({ show: true, userId, userType, userName });
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteConfirm({ show: false, userId: null, userType: null, userName: null });
+  };
+
+  const handleDeleteConfirm = async () => {
+    const { userId, userType } = deleteConfirm;
+    setDeleteConfirm({ show: false, userId: null, userType: null, userName: null });
 
     try {
+      // IMPORTANT: Delete auth user FIRST, then delete profile
+      // This ensures the user cannot log in even if profile deletion fails
+      let authDeleted = false;
+      let authError = null;
+      
+      // Try to delete auth user using RPC function
+      // This requires the SQL script to be run in Supabase
+      try {
+        console.log('🔧 Attempting to delete auth user via RPC function...');
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('delete_auth_user', { user_id: userId });
+        
+        if (rpcError) {
+          console.error('❌ RPC function failed:', rpcError);
+          authError = rpcError;
+          
+          // Check if the function doesn't exist (SQL script not run)
+          if (rpcError.message?.includes('function') || rpcError.code === '42883') {
+            authError = new Error('The delete_auth_user function does not exist. Please run the SQL script: database/delete_auth_user.sql in Supabase SQL Editor.');
+          }
+        } else if (rpcResult === true) {
+          authDeleted = true;
+          console.log('✅ Auth user deleted successfully via RPC function');
+        } else if (rpcResult === false) {
+          // Function returned false - user may not exist or deletion failed
+          console.warn('⚠️ RPC function returned false - checking if user exists...');
+          // Check if user still exists
+          const { data: userCheck } = await supabase.auth.getUser(userId);
+          if (userCheck?.user) {
+            authError = new Error('Auth user still exists after deletion attempt. The RPC function may not have proper permissions.');
+          } else {
+            // User doesn't exist, consider it deleted
+            authDeleted = true;
+            console.log('✅ Auth user does not exist (already deleted or never existed)');
+          }
+        }
+      } catch (authErr) {
+        console.error('❌ Auth deletion error:', authErr);
+        authError = authErr;
+      }
+
+      // If auth deletion failed, warn but continue with profile deletion
+      if (!authDeleted && authError) {
+        const shouldContinue = window.confirm(
+          `⚠️ Warning: Could not delete the authentication account.\n\n` +
+          `Error: ${authError.message}\n\n` +
+          `The profile will be deleted, but the user may still be able to log in.\n\n` +
+          `Please make sure you have run the SQL script in Supabase:\n` +
+          `database/delete_auth_user.sql\n\n` +
+          `Continue with profile deletion anyway?`
+        );
+        
+        if (!shouldContinue) {
+          return;
+        }
+      }
+
       // Delete from the appropriate profile table
       const tableName = userType === 'jobseeker' ? 'jobseeker_profiles' : 'employer_profiles';
       const { error: profileError } = await supabase
@@ -126,22 +191,47 @@ const UserManagement = () => {
         throw profileError;
       }
 
-      // Delete from auth.users
-      const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-
-      if (authError) {
-        console.error('Error deleting auth user:', authError);
-        // Continue anyway as the profile is deleted
-      }
+      console.log('✅ Profile deleted successfully');
 
       // Refresh the user list
       await fetchUsers();
-      alert(`${userType} deleted successfully!`);
+      
+      // Show success/warning message
+      if (authDeleted) {
+        setDeleteStatus({
+          show: true,
+          type: 'success',
+          message: 'User Deleted Successfully',
+          details: `The ${userType} account and authentication credentials have been permanently removed. The user will not be able to log in.`,
+          showCancel: false,
+          onConfirm: () => setDeleteStatus({ show: false, type: 'success', message: '', details: '', showCancel: false, onConfirm: null, onCancel: null }),
+          onCancel: null
+        });
+      } else {
+        setDeleteStatus({
+          show: true,
+          type: 'warning',
+          message: 'Profile Deleted with Warning',
+          details: `The ${userType} profile has been deleted, but the authentication account deletion failed.\n\nError: ${authError?.message || 'Unknown error'}\n\nThe user may still be able to log in.\n\nTo fix this:\n1. Run the SQL script: database/delete_auth_user.sql in Supabase SQL Editor\n2. Or delete the user manually from Supabase Dashboard > Authentication > Users\n3. Or contact a system administrator.`,
+          showCancel: false,
+          onConfirm: () => setDeleteStatus({ show: false, type: 'success', message: '', details: '', showCancel: false, onConfirm: null, onCancel: null }),
+          onCancel: null
+        });
+      }
     } catch (error) {
       console.error('Error deleting user:', error);
-      alert(`Failed to delete ${userType}: ${error.message}`);
+      setDeleteStatus({
+        show: true,
+        type: 'error',
+        message: 'Deletion Failed',
+        details: error.message,
+        showCancel: false,
+        onConfirm: () => setDeleteStatus({ show: false, type: 'success', message: '', details: '', showCancel: false, onConfirm: null, onCancel: null }),
+        onCancel: null
+      });
     }
   };
+
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -454,7 +544,7 @@ const UserManagement = () => {
                             </button>
                             <button 
                               className="delete-btn"
-                              onClick={() => handleDeleteUser(user.id, 'jobseeker')}
+                              onClick={() => handleDeleteClick(user.id, 'jobseeker', buildJobseekerName(user))}
                             >
                               🗑️ Delete
                             </button>
@@ -526,7 +616,7 @@ const UserManagement = () => {
                             </button>
                             <button 
                               className="delete-btn"
-                              onClick={() => handleDeleteUser(user.id, 'employer')}
+                              onClick={() => handleDeleteClick(user.id, 'employer', user.business_name || user.email)}
                             >
                               🗑️ Delete
                             </button>
@@ -872,6 +962,75 @@ const UserManagement = () => {
             <div className="modal-footer">
               <button className="close-modal-btn" onClick={handleCloseModal}>
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.show && (
+        <div className="delete-confirm-overlay" onClick={handleDeleteCancel}>
+          <div className="delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="delete-confirm-header">
+              <div className="delete-confirm-icon">⚠️</div>
+              <h3>Confirm Deletion</h3>
+            </div>
+            <div className="delete-confirm-body">
+              <p className="delete-confirm-message">
+                Are you sure you want to delete this <strong>{deleteConfirm.userType}</strong>?
+              </p>
+              {deleteConfirm.userName && (
+                <p className="delete-confirm-name">
+                  <strong>{deleteConfirm.userName}</strong>
+                </p>
+              )}
+              <div className="delete-confirm-warning">
+                <p>⚠️ This action cannot be undone.</p>
+                <p>This will permanently delete their account and they will not be able to log in.</p>
+              </div>
+            </div>
+            <div className="delete-confirm-footer">
+              <button className="delete-confirm-cancel" onClick={handleDeleteCancel}>
+                Cancel
+              </button>
+              <button className="delete-confirm-delete" onClick={handleDeleteConfirm}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Status Modal */}
+      {deleteStatus.show && (
+        <div className="delete-status-overlay" onClick={() => !deleteStatus.showCancel && deleteStatus.onConfirm && deleteStatus.onConfirm()}>
+          <div className="delete-status-modal" onClick={(e) => e.stopPropagation()}>
+            <div className={`delete-status-header ${deleteStatus.type}`}>
+              <div className="delete-status-icon">
+                {deleteStatus.type === 'success' && '✅'}
+                {deleteStatus.type === 'warning' && '⚠️'}
+                {deleteStatus.type === 'error' && '❌'}
+              </div>
+              <h3>{deleteStatus.message}</h3>
+            </div>
+            <div className="delete-status-body">
+              <p className="delete-status-details">{deleteStatus.details}</p>
+            </div>
+            <div className="delete-status-footer">
+              {deleteStatus.showCancel && deleteStatus.onCancel && (
+                <button 
+                  className="delete-status-button cancel"
+                  onClick={() => deleteStatus.onCancel && deleteStatus.onCancel()}
+                >
+                  Cancel
+                </button>
+              )}
+              <button 
+                className={`delete-status-button ${deleteStatus.type}`}
+                onClick={() => deleteStatus.onConfirm && deleteStatus.onConfirm()}
+              >
+                {deleteStatus.showCancel ? 'Continue' : 'OK'}
               </button>
             </div>
           </div>

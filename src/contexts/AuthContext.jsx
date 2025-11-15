@@ -261,8 +261,15 @@ export function AuthProvider({ children }) {
       return true;
     }
 
-    // If not found in either table, allow login (new user or legacy account)
-    console.log('📋 Account not found in profile tables, allowing login');
+    // If not found in either table, check if this is a deleted account
+    // If expectedUserType is provided, we should have found a profile
+    if (expectedUserType) {
+      console.error('❌ Profile not found for user type:', expectedUserType);
+      throw new Error('Your account has been deleted. Please contact support if you believe this is an error.');
+    }
+    
+    // If no expected user type, allow login (new user or legacy account)
+    console.log('📋 Account not found in profile tables, allowing login (no expected user type)');
     return true;
   }
 
@@ -429,7 +436,20 @@ export function AuthProvider({ children }) {
               });
             } else {
               console.log('❌ No profile found in any table');
-              // Set basic user data with default userType
+              
+              // If expectedUserType was provided, the profile should exist
+              // This means the account was deleted
+              if (expectedUserType) {
+                console.error('❌ Profile not found for deleted account');
+                // Sign out the user
+                await supabase.auth.signOut();
+                setCurrentUser(null);
+                setUserData(null);
+                setProfileLoaded(false);
+                throw new Error('Your account has been deleted. Please contact support if you believe this is an error.');
+              }
+              
+              // Set basic user data with default userType (for new users)
               setUserData({
                 id: data.user.id,
                 email: data.user.email,
@@ -446,9 +466,10 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.error('Login error details:', error);
       
-      // If account type validation failed, clear the session and user state
-      if (error.message?.includes('This account is registered as')) {
-        console.log('🧹 Clearing session and user state due to account type mismatch');
+      // If account type validation failed or account was deleted, clear the session and user state
+      if (error.message?.includes('This account is registered as') || 
+          error.message?.includes('account has been deleted')) {
+        console.log('🧹 Clearing session and user state due to validation failure');
         setAccountTypeMismatch(true);
         
         // Clear user state immediately to prevent any redirects

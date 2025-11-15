@@ -553,7 +553,9 @@ const JobManagementSimplified = () => {
           .select('id, business_name, company_logo_url')
           .in('id', Array.from(employerIds));
 
-        if (!employerError) {
+        if (employerError) {
+          console.error('Error fetching employers:', employerError);
+        } else {
           employerMap = Object.fromEntries(
             (employerData || []).map((emp) => [
               emp.id,
@@ -563,13 +565,30 @@ const JobManagementSimplified = () => {
               }
             ])
           );
+          console.log(`✅ Loaded ${Object.keys(employerMap).length} employers for ${employerIds.size} unique employer IDs`);
         }
+      } else {
+        console.log('⚠️ No employer IDs found in jobs');
       }
 
+      // Filter out jobs from deleted employers
+      // ONLY include jobs where the employer_id exists AND the employer still exists in employer_profiles
       const pendingList = [];
       for (const job of pendingRows) {
         const status = (job.status || 'pending').toLowerCase();
         if (status !== 'pending') continue;
+        
+        // STRICT: Only include jobs with a valid employer_id that exists in employerMap
+        if (!job.employer_id) {
+          console.log(`Skipping job ${job.id} - no employer_id`);
+          continue;
+        }
+        
+        if (!employerMap[job.employer_id]) {
+          console.log(`Skipping job ${job.id} - employer ${job.employer_id} has been deleted`);
+          continue;
+        }
+        
         pendingList.push({
           ...job,
           business_name: employerMap[job.employer_id]?.business_name || 'Company Name Not Provided',
@@ -584,7 +603,20 @@ const JobManagementSimplified = () => {
       const approvedList = approvedRows
         .filter((job) => {
           const status = (job.status || '').toLowerCase();
-          return status === 'approved' || status === 'active';
+          if (status !== 'approved' && status !== 'active') return false;
+          
+          // STRICT: Only include jobs with a valid employer_id that exists in employerMap
+          if (!job.employer_id) {
+            console.log(`Skipping job ${job.id} - no employer_id`);
+            return false;
+          }
+          
+          if (!employerMap[job.employer_id]) {
+            console.log(`Skipping job ${job.id} - employer ${job.employer_id} has been deleted`);
+            return false;
+          }
+          
+          return true;
         })
         .map((job) => ({
           ...job,
@@ -596,6 +628,8 @@ const JobManagementSimplified = () => {
             null
         }));
 
+      console.log(`📊 Filtered results: ${pendingList.length} pending jobs, ${approvedList.length} approved jobs (from ${pendingRows.length} pending, ${approvedRows.length} approved total)`);
+      
       setPendingJobs(pendingList);
       setApprovedJobs(approvedList);
     } catch (err) {

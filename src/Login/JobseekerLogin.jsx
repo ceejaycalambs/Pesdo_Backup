@@ -15,6 +15,13 @@ const JobseekerLogin = () => {
 
   const { login, currentUser, userData, loading: authLoading, profileLoaded } = auth || {};
 
+  // Clear form fields when component mounts
+  useEffect(() => {
+    setEmail('');
+    setPassword('');
+    setError('');
+  }, []);
+
   // Handle redirection after successful login
   useEffect(() => {
     console.log('Login useEffect - Auth state:', { 
@@ -53,6 +60,9 @@ const JobseekerLogin = () => {
       await login(email, password, 'jobseeker');
       
       console.log('Login completed successfully');
+      // Clear form fields after successful login
+      setEmail('');
+      setPassword('');
       // Login successful - user will be redirected by the useEffect
       setLoading(false);
     } catch (err) {
@@ -63,6 +73,8 @@ const JobseekerLogin = () => {
         errorMessage = 'Invalid email or password. Please check your credentials and try again.';
       } else if (err.message?.includes('This account is registered as')) {
         errorMessage = err.message;
+      } else if (err.message?.includes('account has been deleted')) {
+        errorMessage = 'Your account has been deleted. Please contact support if you believe this is an error.';
       } else if (err.message?.includes('Email not confirmed')) {
         errorMessage = 'Please check your email and click the confirmation link before logging in.';
       } else if (err.message?.includes('Too many requests')) {
@@ -108,12 +120,13 @@ const JobseekerLogin = () => {
             <input
               type="email"
               id="email"
+              name="jobseeker-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
               required
               disabled={loading}
-              autoComplete="off"
+              autoComplete="new-password"
             />
           </div>
 
@@ -123,12 +136,13 @@ const JobseekerLogin = () => {
               <input
                 type={showPassword ? 'text' : 'password'}
                 id="password"
+                name="jobseeker-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
                 disabled={loading}
-                autoComplete="off"
+                autoComplete="new-password"
               />
               <button
                 type="button"
@@ -149,6 +163,14 @@ const JobseekerLogin = () => {
                   </svg>
                 )}
               </button>
+            </div>
+            <div className="forgot-password-container">
+              <Link 
+                to="/forgot-password?type=jobseeker" 
+                className="forgot-password-link"
+              >
+                Forgot Password?
+              </Link>
             </div>
           </div>
 

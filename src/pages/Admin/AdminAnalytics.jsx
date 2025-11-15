@@ -673,6 +673,22 @@ const AdminAnalytics = () => {
         console.error('Error fetching jobs:', jobsError);
       }
 
+      // Filter out jobs from deleted employers
+      // Only include jobs where employer_profiles exists (employer still exists)
+      const validJobs = (jobs || []).filter(job => {
+        // If employer_profiles is null, the employer was deleted
+        if (!job.employer_profiles) {
+          console.log(`Skipping job ${job.id} - employer ${job.employer_id} has been deleted`);
+          return false;
+        }
+        // Also check if employer_id exists and is valid
+        if (!job.employer_id) {
+          console.log(`Skipping job ${job.id} - no employer_id`);
+          return false;
+        }
+        return true;
+      });
+
       const { data: applications, error: applicationsError } = await supabase
         .from('applications')
         .select('id, status, job_id, jobseeker_id, applied_at, created_at');
@@ -729,7 +745,7 @@ const AdminAnalytics = () => {
         updatedAt: profile.updated_at || null
       }));
 
-      const vacancyList = (jobs || []).map(job => ({
+      const vacancyList = (validJobs || []).map(job => ({
         id: job.id,
         jobPosition: job.position_title || job.title || job.job_title || 'Untitled Vacancy',
         employerName: job.employer_profiles?.business_name || '—',
@@ -762,7 +778,13 @@ const AdminAnalytics = () => {
       const placementStatuses = new Set(['accepted', 'hired', 'placed']);
 
       const referralList = (applications || [])
-        .filter(app => referralStatuses.has((app.status || '').toLowerCase()))
+        .filter(app => {
+          // Only include referrals for jobs that still exist (from valid employers)
+          if (!app.job_id || !jobMap.has(app.job_id)) {
+            return false;
+          }
+          return referralStatuses.has((app.status || '').toLowerCase());
+        })
         .map(app => {
           const job = jobMap.get(app.job_id) || {};
           const seeker = jobseekerMap.get(app.jobseeker_id) || {};
@@ -789,7 +811,13 @@ const AdminAnalytics = () => {
       };
 
       const placementList = (applications || [])
-        .filter(app => placementStatuses.has((app.status || '').toLowerCase()))
+        .filter(app => {
+          // Only include placements for jobs that still exist (from valid employers)
+          if (!app.job_id || !jobMap.has(app.job_id)) {
+            return false;
+          }
+          return placementStatuses.has((app.status || '').toLowerCase());
+        })
         .map(app => {
           const job = jobMap.get(app.job_id) || {};
           const seeker = jobseekerMap.get(app.jobseeker_id) || {};

@@ -247,6 +247,25 @@
   font-size: 0.9rem;
 }
 
+.forgot-password-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 5px;
+}
+
+.forgot-password-link {
+  font-size: 0.85rem;
+  color: #005177;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.forgot-password-link:hover {
+  color: #0079a1;
+  text-decoration: underline;
+}
+
 .form-group input {
   padding: 12px 16px;
   border: 2px solid #e1e5e9;

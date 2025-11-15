@@ -72,14 +72,29 @@ const LandingPage = () => {
                     error: employerError 
                 });
                 
-                // Fetch approved jobs (Vacancies Solicited)
+                // Fetch approved jobs (Vacancies Solicited) with employer info
+                // Only count jobs from existing employers (filter out deleted employers)
                 const { data: jobs, error: jobsError } = await supabase
                     .from('jobs')
-                    .select('id')
+                    .select('id, employer_id, employer_profiles(id)')
                     .eq('status', 'approved');
                 
+                // Filter out jobs from deleted employers
+                const validJobs = (jobs || []).filter(job => {
+                    if (!job.employer_id) {
+                        console.log(`Skipping job ${job.id} - no employer_id`);
+                        return false;
+                    }
+                    if (!job.employer_profiles) {
+                        console.log(`Skipping job ${job.id} - employer ${job.employer_id} has been deleted`);
+                        return false;
+                    }
+                    return true;
+                });
+                
                 console.log('Jobs query result:', { 
-                    count: jobs?.length || 0, 
+                    total: jobs?.length || 0,
+                    valid: validJobs.length,
                     error: jobsError 
                 });
                 
@@ -108,7 +123,7 @@ const LandingPage = () => {
                 const statsData = {
                     jobseekers: jobseekerProfiles?.length || 0,
                     employers: employerProfiles?.length || 0,
-                    vacancies: jobs?.length || 0,
+                    vacancies: validJobs.length || 0,
                     referrals: referralsCount,
                     placements: placementsCount
                 };

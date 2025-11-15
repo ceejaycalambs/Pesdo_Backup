@@ -17,6 +17,8 @@ import AdminAnalytics from './pages/Admin/AdminAnalytics';
 import SuperAdminLogs from './pages/Admin/SuperAdminLogs';
 import AdminManagement from './pages/Admin/AdminManagement';
 import AuthCallback from './pages/AuthCallback';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import './styles/responsive.css';
 
@@ -43,6 +45,8 @@ function App() {
                     <Route path="/admin/logs" element={<SuperAdminLogs />} />
                     <Route path="/admin/settings" element={<AdminManagement />} />
                     <Route path="/auth/callback" element={<AuthCallback />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
                 </Routes>
             </AuthProvider>
         </Router>
