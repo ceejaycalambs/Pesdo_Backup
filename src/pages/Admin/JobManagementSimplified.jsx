@@ -509,7 +509,14 @@ const JobManagementSimplified = () => {
   // Render refer jobseeker tab - styled like employer manage jobs
   const renderReferJobseeker = () => {
     if (loading) {
-      return <div className="loading">Loading jobs...</div>;
+      return (
+        <div className="job-management-simplified">
+          <div className="loading-screen">
+            <div className="loading-spinner"></div>
+            <p>Loading jobs...</p>
+          </div>
+        </div>
+      );
     }
 
     const hasJobs = filteredReferJobs.length > 0;
@@ -1221,7 +1228,14 @@ const JobManagementSimplified = () => {
   };
 
   if (loading) {
-    return <div className="loading">Loading job management...</div>;
+    return (
+      <div className="job-management-simplified">
+        <div className="loading-screen">
+          <div className="loading-spinner"></div>
+          <p>Loading job management...</p>
+        </div>
+      </div>
+    );
   }
 
   const formatDate = (dateString) => {

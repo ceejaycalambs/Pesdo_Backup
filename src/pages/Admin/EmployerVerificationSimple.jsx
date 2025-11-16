@@ -289,7 +289,14 @@ const EmployerVerificationSimple = () => {
   };
 
   if (loading) {
-    return <div className="loading">Loading employer verification...</div>;
+    return (
+      <div className="employer-verification">
+        <div className="loading-screen">
+          <div className="loading-spinner"></div>
+          <p>Loading employer verification...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
