@@ -262,7 +262,7 @@ const JobseekerDashboard = () => {
       if (missingJobIds.length) {
         const { data: extraJobs, error: extraJobsError } = await supabase
           .from('jobs')
-          .select('*')
+          .select('*, employer_profiles!inner(id)')
           .in('id', Array.from(new Set(missingJobIds)));
 
         if (extraJobsError) {
@@ -387,6 +387,10 @@ const JobseekerDashboard = () => {
 
       const normalizedApplications = applicationsData.map((application) => {
         const job = jobMap.get(application.job_id) || {};
+        // If the job no longer exists (e.g., employer deleted), skip this application
+        if (!job || !job.id) {
+          return null;
+        }
         const employerProfile = employerMap.get(job.employer_id);
         const location =
           job.job_location ||
@@ -485,7 +489,7 @@ const JobseekerDashboard = () => {
           },
           referred: (application.status || '').toLowerCase() === 'referred'
         };
-      });
+      }).filter(Boolean);
       setAppliedJobs(normalizedApplications);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);

@@ -141,7 +141,7 @@ export const supabaseService = {
       getAll: async () => {
         const { data, error } = await supabase
           .from('jobs')
-          .select('*')
+          .select('*, employer_profiles!inner(id)')
           .order('created_at', { ascending: false })
         if (error) throw error
         return data || []
@@ -150,7 +150,7 @@ export const supabaseService = {
       getRecentJobs: async (limit = 3) => {
         const { data, error } = await supabase
           .from('jobs')
-          .select('*')
+          .select('*, employer_profiles!inner(id)')
           .order('created_at', { ascending: false })
           .limit(limit)
         if (error) throw error
