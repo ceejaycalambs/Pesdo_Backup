@@ -1373,17 +1373,20 @@ const AdminAnalytics = () => {
     );
   };
 
+  // Get base path for navigation items
+  const navBase = isAdminHost ? '' : '/admin';
+  
   const navItems = [
-    { path: '/admin/dashboard', label: 'Dashboard', icon: '📊', exact: true },
-    { path: '/admin/users', label: 'User Management', icon: '👥' },
-    { path: '/admin/jobs', label: 'Manage Jobs', icon: '💼' },
-    { path: '/admin/verification', label: 'Employer Verification', icon: '🔍' },
-    { path: '/admin/analytics', label: 'Analytics', icon: '📈' },
+    { path: `${navBase}/dashboard`, label: 'Dashboard', icon: '📊', exact: true },
+    { path: `${navBase}/users`, label: 'User Management', icon: '👥' },
+    { path: `${navBase}/jobs`, label: 'Manage Jobs', icon: '💼' },
+    { path: `${navBase}/verification`, label: 'Employer Verification', icon: '🔍' },
+    { path: `${navBase}/analytics`, label: 'Analytics', icon: '📈' },
   ];
 
   const superAdminNavItems = [
-    { path: '/admin/logs', label: 'System Logs', icon: '📋' },
-    { path: '/admin/settings', label: 'Admin Management', icon: '⚙️' },
+    { path: `${navBase}/logs`, label: 'System Logs', icon: '📋' },
+    { path: `${navBase}/settings`, label: 'Admin Management', icon: '⚙️' },
   ];
 
   const isActive = (path, exact = false) => {
@@ -1391,7 +1394,7 @@ const AdminAnalytics = () => {
     if (exact) {
       return location.pathname === pathOnly;
     }
-    if (pathOnly === '/admin/dashboard') {
+    if (pathOnly === `${navBase}/dashboard`) {
       return location.pathname === pathOnly;
     }
     return location.pathname.startsWith(pathOnly);

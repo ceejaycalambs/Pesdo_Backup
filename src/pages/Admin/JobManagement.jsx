@@ -17,6 +17,12 @@ const JobManagement = () => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [showJobModal, setShowJobModal] = useState(false);
   const [adminRole, setAdminRole] = useState(null);
+  
+  // Get correct paths based on host
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isAdminHost = host.startsWith('admin.');
+  const usersPath = isAdminHost ? '/users' : '/admin/users';
+  const dashboardPath = isAdminHost ? '/dashboard' : '/admin/dashboard';
 
   useEffect(() => {
     fetchJobs();
@@ -634,13 +640,13 @@ const JobManagement = () => {
           <div className="refer-actions">
             <button 
               className="btn-primary"
-              onClick={() => navigate('/admin/users')}
+              onClick={() => navigate(usersPath)}
             >
               View Jobseekers
             </button>
             <button 
               className="btn-secondary"
-              onClick={() => navigate('/admin/dashboard')}
+              onClick={() => navigate(dashboardPath)}
             >
               Back to Dashboard
             </button>
@@ -673,7 +679,7 @@ const JobManagement = () => {
           <div className="header-right">
             <button 
               className="back-button"
-              onClick={() => navigate('/admin/dashboard')}
+              onClick={() => navigate(dashboardPath)}
             >
               ← Back to Dashboard
             </button>
