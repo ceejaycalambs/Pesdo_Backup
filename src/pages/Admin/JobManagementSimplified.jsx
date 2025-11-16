@@ -1734,7 +1734,7 @@ const JobManagementSimplified = () => {
                                     <td>{jobseeker.gender || 'Not specified'}</td>
                                     <td>{jobseeker.age ? `${jobseeker.age}` : '—'}</td>
                                     <td>{jobseeker.address || 'Not specified'}</td>
-                                    <td style={{whiteSpace:'nowrap'}}>
+                                    <td>
                                       {resumeUrl ? (
                                         <button
                                           className="btn-view-resume"

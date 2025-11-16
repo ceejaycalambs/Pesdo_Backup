@@ -1779,12 +1779,13 @@
   background: linear-gradient(135deg, #005177, #0079a1);
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 8px 14px;
   border-radius: 6px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  white-space: nowrap;
 }
 
 .btn-refer:hover:not(:disabled) {
@@ -1808,15 +1809,16 @@
   background: #ef4444;
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 8px 14px;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .btn-cancel-referral:hover:not(:disabled) {
@@ -1924,15 +1926,17 @@
   background: linear-gradient(135deg, #005177, #0079a1);
   color: white;
   border: none;
-  padding: 10px 20px;
+  padding: 8px 14px;
   border-radius: 8px;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
+  white-space: nowrap;
+  margin-right: 6px;
 }
 
 .btn-view-resume:hover {
@@ -1942,12 +1946,29 @@
 
 .no-resume-indicator {
   color: #6c757d;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-style: italic;
-  padding: 10px 20px;
+  padding: 8px 14px;
   background: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e9ecef;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+/* Refer Jobseekers Table - Actions Column */
+.jobs-table.refer-jobseekers th:last-child,
+.jobs-table.refer-jobseekers td:last-child {
+  min-width: 200px;
+  width: 200px;
+}
+
+.jobs-table.refer-jobseekers td:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 10px 12px;
 }
 
 /* Resume Viewer Modal */
