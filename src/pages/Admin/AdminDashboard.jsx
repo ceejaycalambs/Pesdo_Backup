@@ -94,7 +94,8 @@ const AdminDashboard = () => {
           return;
         }
       } else {
-        navigate('/admin');
+        const host = typeof window !== 'undefined' ? window.location.hostname : '';
+        navigate(host.startsWith('admin.') ? '/' : '/admin');
         return;
       }
     }
@@ -112,7 +113,8 @@ const AdminDashboard = () => {
 
       if (userType !== 'admin') {
         // Not an admin, redirect to login
-        navigate('/admin');
+        const host = typeof window !== 'undefined' ? window.location.hostname : '';
+        navigate(host.startsWith('admin.') ? '/' : '/admin');
         return;
       }
 

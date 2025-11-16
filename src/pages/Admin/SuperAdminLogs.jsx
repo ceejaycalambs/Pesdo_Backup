@@ -86,15 +86,18 @@ const SuperAdminLogs = () => {
           localStorage.setItem('admin_role', 'super_admin');
         } else {
           // Not super_admin, redirect to dashboard
-          navigate('/admin/dashboard');
+          const host = typeof window !== 'undefined' ? window.location.hostname : '';
+          navigate(host.startsWith('admin.') ? '/dashboard' : '/admin/dashboard');
         }
       } else {
         // Error fetching profile or not an admin
-        navigate('/admin/dashboard');
+        const host = typeof window !== 'undefined' ? window.location.hostname : '';
+        navigate(host.startsWith('admin.') ? '/dashboard' : '/admin/dashboard');
       }
     } else {
       // No user, redirect to login
-      navigate('/admin');
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      navigate(host.startsWith('admin.') ? '/' : '/admin');
     }
   };
 
