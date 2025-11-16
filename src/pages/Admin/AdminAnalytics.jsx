@@ -31,6 +31,12 @@ const AdminAnalytics = () => {
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [analyticsTab, setAnalyticsTab] = useState('analytics');
   const [adminRole, setAdminRole] = useState(null);
+  
+  // Get correct paths based on host
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isAdminHost = host.startsWith('admin.');
+  const loginPath = isAdminHost ? '/' : '/admin';
+  const dashboardPath = isAdminHost ? '/dashboard' : '/admin/dashboard';
   const [analyticsData, setAnalyticsData] = useState({
     analytics: [],
     jobseekers: [],
@@ -593,7 +599,7 @@ const AdminAnalytics = () => {
           return;
         }
       } else {
-        navigate('/admin');
+        navigate(loginPath);
         return;
       }
     }
@@ -604,7 +610,7 @@ const AdminAnalytics = () => {
       const userType = userData.usertype || userData.userType;
       if (userType !== 'admin') {
         // Not an admin, redirect to login
-        navigate('/admin');
+        navigate(loginPath);
         return;
       }
 
@@ -873,10 +879,10 @@ const AdminAnalytics = () => {
       localStorage.removeItem('admin_email');
       await supabase.auth.signOut();
       setAdminEmail('');
-      navigate('/admin');
+      navigate(loginPath);
     } catch (err) {
       console.error('Error during admin logout:', err);
-      navigate('/admin');
+      navigate(loginPath);
     }
   };
 

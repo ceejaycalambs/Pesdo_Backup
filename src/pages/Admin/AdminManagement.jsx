@@ -9,6 +9,12 @@ const AdminManagement = () => {
   const [loading, setLoading] = useState(true);
   const [admins, setAdmins] = useState([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  
+  // Get correct paths based on host
+  const host = typeof window !== 'undefined' ? window.location.hostname : '';
+  const isAdminHost = host.startsWith('admin.');
+  const loginPath = isAdminHost ? '/' : '/admin';
+  const dashboardPath = isAdminHost ? '/dashboard' : '/admin/dashboard';
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -87,17 +93,15 @@ const AdminManagement = () => {
           setLoading(false);
         } else {
           // Not super_admin, redirect to dashboard
-          const host = typeof window !== 'undefined' ? window.location.hostname : '';
-          navigate(host.startsWith('admin.') ? '/dashboard' : '/admin/dashboard');
+          navigate(dashboardPath);
         }
       } else {
         // Error fetching profile or not an admin
-        const host = typeof window !== 'undefined' ? window.location.hostname : '';
-        navigate(host.startsWith('admin.') ? '/dashboard' : '/admin/dashboard');
+        navigate(dashboardPath);
       }
     } else {
       // No user, redirect to login
-      navigate('/admin');
+      navigate(loginPath);
     }
   };
 
