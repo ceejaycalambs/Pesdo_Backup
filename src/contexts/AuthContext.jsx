@@ -905,11 +905,20 @@ export function AuthProvider({ children }) {
               if (ap) {
                 console.log('✅ Auth state change - Admin profile fetched:', ap);
                 const role = ap.role || 'admin';
-                setUserData({
+                const newUserData = {
                   ...ap,
                   userType: ap.userType || ap.usertype || 'admin',
                   role,
                   isSuperAdmin: role === 'super_admin'
+                };
+                // Only update if data actually changed
+                setUserData(prev => {
+                  if (prev?.id === newUserData.id && 
+                      prev?.userType === newUserData.userType &&
+                      prev?.role === newUserData.role) {
+                    return prev; // Return same reference if unchanged
+                  }
+                  return newUserData;
                 });
                 setProfileLoaded(true);
                 return;
@@ -923,7 +932,14 @@ export function AuthProvider({ children }) {
                 .maybeSingle();
               if (ep) {
                 console.log('✅ Auth state change - Employer profile fetched:', ep);
-                setUserData({ ...ep, userType: ep.usertype || 'employer' });
+                const newUserData = { ...ep, userType: ep.usertype || 'employer' };
+                setUserData(prev => {
+                  if (prev?.id === newUserData.id && 
+                      prev?.userType === newUserData.userType) {
+                    return prev;
+                  }
+                  return newUserData;
+                });
                 setProfileLoaded(true);
                 return;
               }
@@ -936,25 +952,46 @@ export function AuthProvider({ children }) {
                 .maybeSingle();
               if (jp) {
                 console.log('✅ Auth state change - Jobseeker profile fetched:', jp);
-                setUserData({ ...jp, userType: jp.usertype || 'jobseeker' });
+                const newUserData = { ...jp, userType: jp.usertype || 'jobseeker' };
+                setUserData(prev => {
+                  if (prev?.id === newUserData.id && 
+                      prev?.userType === newUserData.userType) {
+                    return prev;
+                  }
+                  return newUserData;
+                });
                 setProfileLoaded(true);
                 return;
               }
 
               // Default
               console.log('⚠️ Auth state change - No profile found in any table, using default');
-              setUserData({
+              const defaultUserData = {
                 id: session.user.id,
                 email: session.user.email,
                 userType: 'jobseeker'
+              };
+              setUserData(prev => {
+                if (prev?.id === defaultUserData.id && 
+                    prev?.userType === defaultUserData.userType) {
+                  return prev;
+                }
+                return defaultUserData;
               });
               setProfileLoaded(true);
             } catch (err) {
               console.log('❌ Auth state change - Profile fetch error:', err.message);
-              setUserData({
+              const errorUserData = {
                 id: session.user.id,
                 email: session.user.email,
                 userType: 'jobseeker'
+              };
+              setUserData(prev => {
+                if (prev?.id === errorUserData.id && 
+                    prev?.userType === errorUserData.userType) {
+                  return prev;
+                }
+                return errorUserData;
               });
               setProfileLoaded(true);
             }
