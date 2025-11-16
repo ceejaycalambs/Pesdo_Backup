@@ -2,10 +2,14 @@ import React, { useEffect, useState } from 'react';
 import './LandingPage.css';
 import Logo_pesdo from '../assets/Logo_pesdo.png';
 import Pesdo_Office from '../assets/Pesdo_Office.png';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 const LandingPage = () => {
+    const navigate = useNavigate();
+    const auth = useAuth();
+    const { currentUser, userData, loading: authLoading, profileLoaded } = auth || {};
     const [headerScrolled, setHeaderScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [stats, setStats] = useState({
@@ -18,6 +22,43 @@ const LandingPage = () => {
     const [loading, setLoading] = useState(true);
     const [employers, setEmployers] = useState([]);
     const [loadingEmployers, setLoadingEmployers] = useState(true);
+
+    // Redirect authenticated users to their dashboard
+    useEffect(() => {
+        if (!auth) return; // Ensure auth context is available
+        
+        // Wait for auth to finish loading
+        if (authLoading) return;
+        
+        // If user is authenticated and profile is loaded, redirect to dashboard
+        if (currentUser && profileLoaded && userData) {
+            console.log('🔍 Landing page - User is logged in, redirecting to dashboard...');
+            console.log('User type:', userData.userType);
+            
+            if (userData.userType === 'employer') {
+                // Redirect employers to their dashboard
+                navigate('/employer', { replace: true });
+            } else if (userData.userType === 'jobseeker') {
+                // Redirect jobseekers to their dashboard
+                navigate('/jobseeker', { replace: true });
+            } else if (userData.userType === 'admin') {
+                // Both admin and super_admin use admin subdomain (admin.pesdosurigao.online)
+                // Redirect to admin subdomain dashboard
+                const currentHost = window.location.hostname;
+                let adminHost;
+                if (currentHost.startsWith('admin.')) {
+                    // Already on admin subdomain, just navigate to dashboard
+                    navigate('/dashboard', { replace: true });
+                } else {
+                    // On main domain, redirect to admin subdomain
+                    // Extract base domain (e.g., "pesdosurigao.online" from "pesdosurigao.online" or "www.pesdosurigao.online")
+                    const baseDomain = currentHost.replace(/^(www\.|admin\.)/, '');
+                    adminHost = `admin.${baseDomain}`;
+                    window.location.href = `https://${adminHost}/dashboard`;
+                }
+            }
+        }
+    }, [currentUser, userData, authLoading, profileLoaded, navigate, auth]);
 
     useEffect(() => {
         const handleScroll = () => {
