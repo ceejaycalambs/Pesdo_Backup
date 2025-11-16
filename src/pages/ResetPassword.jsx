@@ -21,28 +21,75 @@ const ResetPassword = () => {
     // Check if we have a valid session from the password reset link
     const checkSession = async () => {
       try {
-        // If tokens were passed from AuthCallback, set the session first
+        // First, check if there are hash fragments in the URL (from password reset link)
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
+        const error = hashParams.get('error');
+        const errorDescription = hashParams.get('error_description');
+
+        // Handle errors from hash fragments
+        if (error) {
+          console.error('Password reset error from URL:', error, errorDescription);
+          setError(errorDescription || 'Invalid or expired reset link. Please request a new password reset.');
+          setVerifying(false);
+          return;
+        }
+
+        // If we have tokens in the hash, set the session
+        if (type === 'recovery' && accessToken) {
+          console.log('🔐 Processing password reset link from URL hash...');
+          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || '',
+          });
+          
+          if (sessionError) {
+            console.error('Error setting session from hash:', sessionError);
+            setError('Invalid or expired reset link. Please request a new password reset.');
+            setVerifying(false);
+            return;
+          }
+
+          // Clear the hash from URL after processing
+          window.history.replaceState(null, '', window.location.pathname);
+          setVerifying(false);
+          return;
+        }
+
+        // If tokens were passed from AuthCallback via state, set the session
         if (location.state?.accessToken && location.state?.refreshToken) {
+          console.log('🔐 Processing password reset link from location state...');
           const { error: sessionError } = await supabase.auth.setSession({
             access_token: location.state.accessToken,
             refresh_token: location.state.refreshToken,
           });
           
           if (sessionError) {
-            console.error('Error setting session:', sessionError);
+            console.error('Error setting session from state:', sessionError);
             setError('Invalid or expired reset link. Please request a new password reset.');
             setVerifying(false);
             return;
           }
+          setVerifying(false);
+          return;
         }
 
-        // Check if we have a valid session
+        // Wait a moment for Supabase's automatic session detection to process hash fragments
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Check if we already have a valid session (from Supabase's automatic processing or previous manual processing)
         const { data: { session }, error: sessionCheckError } = await supabase.auth.getSession();
         if (sessionCheckError || !session) {
+          console.error('No valid session found:', sessionCheckError);
           setError('Invalid or expired reset link. Please request a new password reset.');
           setVerifying(false);
           return;
         }
+
+        // Session is valid, allow password reset
+        console.log('✅ Valid session found for password reset');
         setVerifying(false);
       } catch (err) {
         console.error('Error checking session:', err);
