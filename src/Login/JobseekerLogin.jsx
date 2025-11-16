@@ -203,15 +203,15 @@ const JobseekerLogin = () => {
         <div className="login-footer">
           <p>
             Don't have a jobseeker account?{' '}
-            <a href="/register" className="register-link">
+            <Link to="/register" className="register-link">
               Create one here
-            </a>
+            </Link>
           </p>
           <p>
             Looking for employer login?{' '}
-            <a href="/login/employer" className="switch-login-link">
+            <Link to="/login/employer" className="switch-login-link">
               Click here
-            </a>
+            </Link>
           </p>
           </div>
         </div>
