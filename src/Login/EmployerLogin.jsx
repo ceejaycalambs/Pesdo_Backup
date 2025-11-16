@@ -123,6 +123,7 @@ const EmployerLogin = () => {
               name="employer-email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
               required
               disabled={loading}
               autoComplete="new-password"
@@ -138,6 +139,7 @@ const EmployerLogin = () => {
                 name="employer-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
                 required
                 disabled={loading}
                 autoComplete="new-password"
