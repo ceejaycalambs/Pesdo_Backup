@@ -211,7 +211,13 @@ const SuperAdminLogs = () => {
             <p>Activity and Login Logs</p>
           </div>
           <div className="header-right">
-            <button onClick={() => navigate('/admin/dashboard')} className="back-btn">
+            <button
+              onClick={() => {
+                const host = typeof window !== 'undefined' ? window.location.hostname : '';
+                navigate(host.startsWith('admin.') ? '/dashboard' : '/admin/dashboard');
+              }}
+              className="back-btn"
+            >
               ← Back to Dashboard
             </button>
           </div>
