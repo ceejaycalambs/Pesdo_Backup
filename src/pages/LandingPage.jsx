@@ -241,13 +241,7 @@ const LandingPage = () => {
                                     <small>Manage your business</small>
                                 </span>
                             </Link>
-                            <Link to="/admin" className="login-option admin-option" onClick={() => setMobileMenuOpen(false)}>
-                                <span className="login-icon">⚙️</span>
-                                <span className="login-text">
-                                    <strong>Admin Login</strong>
-                                    <small>System administration</small>
-                                </span>
-                            </Link>
+                            {/* Admin login removed from public site; use admin subdomain */}
                         </div>
                     </div>
                 </nav>
@@ -273,13 +267,7 @@ const LandingPage = () => {
                                 <small>Manage your business</small>
                             </span>
                         </Link>
-                        <Link to="/admin" className="login-option admin-option" onClick={() => setMobileMenuOpen(false)}>
-                            <span className="login-icon">⚙️</span>
-                            <span className="login-text">
-                                <strong>Admin Login</strong>
-                                <small>System administration</small>
-                            </span>
-                        </Link>
+                        {/* Admin login removed from public site; use admin subdomain */}
                     </div>
                 </div>
             </div>
@@ -410,7 +398,7 @@ const LandingPage = () => {
                             <li><Link to="/">Home</Link></li>
                             <li><Link to="/jobseeker/login">Jobseeker Login</Link></li>
                             <li><Link to="/employer/login">Employer Login</Link></li>
-                            <li><Link to="/admin/login">Admin Login</Link></li>
+                            {/* Admin login removed from public site; use admin subdomain */}
                         </ul>
                     </div>
                     <div className="footer-section">

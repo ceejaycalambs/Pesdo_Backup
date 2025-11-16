@@ -47,12 +47,7 @@ const AdminLanding = () => {
             <img src={Logo_pesdo} alt="PESDO Logo" className="admin-header-logo" />
             <h1>PESDO Admin Portal</h1>
           </div>
-          <button 
-            onClick={() => navigate('/')}
-            className="back-btn"
-          >
-            ← Back to Main Site
-          </button>
+          {/* Back to Main Site button removed for dedicated admin subdomain */}
         </div>
       </header>
 
