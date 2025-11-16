@@ -37,6 +37,8 @@ export function AuthProvider({ children }) {
         email,
         password,
         options: {
+          // Ensure confirmation links point to the active origin (prod or dev)
+          emailRedirectTo: (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : undefined,
           data: {
             userType: userType,
             ...sanitizedData
@@ -524,6 +526,35 @@ export function AuthProvider({ children }) {
         console.log('⚠️ No expected user type, skipping account type validation');
       }
       
+      // On first confirmed login: show in-app banner and send a welcome email (once per user)
+      try {
+        const isConfirmed = !!(authData.user.email_confirmed_at || authData.user.confirmed_at);
+        const bannerKey = `pesdo_welcome_shown_${data.user.id}`;
+        const alreadyShown = localStorage.getItem(bannerKey) === '1';
+        if (isConfirmed && !alreadyShown) {
+          // Set banner payload
+          localStorage.setItem('pesdo_welcome_banner', JSON.stringify({
+            text: 'Email confirmed — welcome to PESDO!'
+          }));
+          localStorage.setItem(bannerKey, '1');
+
+          // Fire-and-forget welcome email
+          try {
+            await supabase.functions.invoke('send-email', {
+              body: {
+                to: data.user.email,
+                subject: 'Welcome to PESDO',
+                html: `<p>Hi,</p><p>Your email has been confirmed. Welcome to PESDO!</p><p><a href="${window.location.origin}">Open your dashboard</a></p>`
+              }
+            });
+          } catch (welcomeErr) {
+            console.warn('Welcome email failed (non-fatal):', welcomeErr);
+          }
+        }
+      } catch (bannerErr) {
+        console.warn('Welcome banner/email setup failed (non-fatal):', bannerErr);
+      }
+
       console.log('Setting user state...');
       setCurrentUser(data.user);
       

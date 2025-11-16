@@ -28,7 +28,7 @@ const Register = () => {
     // If user gets auto-logged in during registration, show success message and logout
     if (currentUser && loading && !success) {
       console.log('User auto-logged in during registration, showing success message and logging out for testing');
-      setSuccess(`Your ${formData.userType === 'employer' ? 'employer' : 'jobseeker'} account has been successfully created. Please proceed to the login page to access your account.`);
+      setSuccess(`Your ${formData.userType === 'employer' ? 'employer' : 'jobseeker'} account has been created. Please check your email and click the confirmation link to activate your account before logging in.`);
       setLoading(false);
       
       // Clear the form
@@ -148,7 +148,7 @@ const Register = () => {
       console.log('Register function completed:', result);
       
       // Show success message and stay on register page
-      setSuccess(`Your ${formData.userType === 'employer' ? 'employer' : 'jobseeker'} account has been successfully created. You may now proceed to log in using your registered credentials.`);
+      setSuccess(`Your ${formData.userType === 'employer' ? 'employer' : 'jobseeker'} account has been created. Please confirm your email via the link we sent to activate your account. You will not be able to log in until your email is confirmed.`);
       setLoading(false);
       
       // Clear the form for next registration
@@ -168,7 +168,7 @@ const Register = () => {
         // If we're still loading and no success message is shown, show it now
         if (loading && !success) {
           console.log('Fallback: Showing success message');
-          setSuccess(`Your ${formData.userType === 'employer' ? 'employer' : 'jobseeker'} account has been successfully created. You may now proceed to log in using your registered credentials.`);
+          setSuccess(`Your ${formData.userType === 'employer' ? 'employer' : 'jobseeker'} account has been created. Please confirm your email via the link we sent to activate your account. You will not be able to log in until your email is confirmed.`);
           setLoading(false);
           
           // Clear the form
