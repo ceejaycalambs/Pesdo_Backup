@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import './LandingPage.css';
 import Logo_pesdo from '../assets/Logo_pesdo.png';
 import Pesdo_Office from '../assets/Pesdo_Office.png';
@@ -22,6 +22,7 @@ const LandingPage = () => {
     const [loading, setLoading] = useState(true);
     const [employers, setEmployers] = useState([]);
     const [loadingEmployers, setLoadingEmployers] = useState(true);
+    const hasRedirected = useRef(false);
 
     // Redirect authenticated users to their dashboard
     useEffect(() => {
@@ -30,10 +31,15 @@ const LandingPage = () => {
         // Wait for auth to finish loading
         if (authLoading) return;
         
+        // Prevent multiple redirects
+        if (hasRedirected.current) return;
+        
         // If user is authenticated and profile is loaded, redirect to dashboard
         if (currentUser && profileLoaded && userData) {
             console.log('🔍 Landing page - User is logged in, redirecting to dashboard...');
             console.log('User type:', userData.userType);
+            
+            hasRedirected.current = true;
             
             if (userData.userType === 'employer') {
                 // Redirect employers to their dashboard
@@ -58,7 +64,8 @@ const LandingPage = () => {
                 }
             }
         }
-    }, [currentUser, userData, authLoading, profileLoaded, navigate, auth]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentUser, userData, authLoading, profileLoaded]);
 
     // Show loading screen while checking authentication or redirecting
     if (authLoading || (currentUser && profileLoaded && userData)) {
