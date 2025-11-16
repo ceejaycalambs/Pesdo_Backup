@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../supabase.js';
 import './AdminDashboard.css';
@@ -23,7 +23,6 @@ const DOUGHNUT_COLORS = ['#2563eb', '#f97316', '#10b981', '#6366f1'];
 
 const AdminAnalytics = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { currentUser: authUser, userData } = useAuth();
   const [loading, setLoading] = useState(true);
   const [adminEmail, setAdminEmail] = useState('');
@@ -1373,33 +1372,6 @@ const AdminAnalytics = () => {
     );
   };
 
-  // Get base path for navigation items
-  const navBase = isAdminHost ? '' : '/admin';
-  
-  const navItems = [
-    { path: `${navBase}/dashboard`, label: 'Dashboard', icon: '📊', exact: true },
-    { path: `${navBase}/users`, label: 'User Management', icon: '👥' },
-    { path: `${navBase}/jobs`, label: 'Manage Jobs', icon: '💼' },
-    { path: `${navBase}/verification`, label: 'Employer Verification', icon: '🔍' },
-    { path: `${navBase}/analytics`, label: 'Analytics', icon: '📈' },
-  ];
-
-  const superAdminNavItems = [
-    { path: `${navBase}/logs`, label: 'System Logs', icon: '📋' },
-    { path: `${navBase}/settings`, label: 'Admin Management', icon: '⚙️' },
-  ];
-
-  const isActive = (path, exact = false) => {
-    const pathOnly = path.split('?')[0];
-    if (exact) {
-      return location.pathname === pathOnly;
-    }
-    if (pathOnly === `${navBase}/dashboard`) {
-      return location.pathname === pathOnly;
-    }
-    return location.pathname.startsWith(pathOnly);
-  };
-
   if (loading) {
     return (
       <div className="admin-dashboard">
@@ -1412,79 +1384,28 @@ const AdminAnalytics = () => {
   }
 
   return (
-    <div className="admin-dashboard admin-analytics-page">
-      {/* Sidebar */}
-      <aside className="admin-sidebar">
-        <div className="sidebar-header">
-          <h2>PESDO</h2>
-        </div>
-        <nav className="sidebar-nav">
-          <ul className="nav-list">
-            {navItems.map((item) => (
-              <li key={item.path}>
-                <button
-                  className={`nav-item ${isActive(item.path, item.exact) ? 'active' : ''}`}
-                  onClick={() => navigate(item.path)}
-                >
-                  <span className="nav-icon">{item.icon}</span>
-                  <span className="nav-label">{item.label}</span>
-                </button>
-              </li>
-            ))}
-            {adminRole === 'super_admin' && (
-              <>
-                <li className="nav-divider">
-                  <span>Super Admin</span>
-                </li>
-                {superAdminNavItems.map((item) => (
-                  <li key={item.path}>
-                    <button
-                      className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
-                      onClick={() => navigate(item.path)}
-                    >
-                      <span className="nav-icon">{item.icon}</span>
-                      <span className="nav-label">{item.label}</span>
-                    </button>
-                  </li>
-                ))}
-              </>
-            )}
-          </ul>
-        </nav>
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <p className="user-email">{adminEmail}</p>
-            <p className="user-role">{adminRole === 'super_admin' ? 'Super Admin' : 'Admin'}</p>
+    <div className="admin-analytics">
+      <header className="analytics-header">
+        <div className="header-content">
+          <div className="header-left">
+            <h1>Analytics &amp; Reports</h1>
+            <p>Quick overview of key system metrics</p>
           </div>
-          <button onClick={handleLogout} className="sidebar-logout">
-            <span className="nav-icon">🚪</span>
-            <span>Logout</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <div className="admin-content-wrapper">
-        <header className="admin-dashboard-header">
-          <div className="header-content">
-            <div className="header-left">
-              <h1>Analytics &amp; Reports</h1>
-            </div>
-            <div className="header-right">
-              <button onClick={handleRefresh} className="refresh-btn">
-                🔄 Refresh
-              </button>
-              <button
-                onClick={() => navigate(dashboardPath)}
-                className="analytics-back-btn"
-              >
-                ← Back to Dashboard
-              </button>
-            </div>
+          <div className="header-right">
+            <button onClick={handleRefresh} className="refresh-btn">
+              🔄 Refresh
+            </button>
+            <button
+              onClick={() => navigate(dashboardPath)}
+              className="back-btn"
+            >
+              ← Back to Dashboard
+            </button>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="admin-dashboard-main analytics-main">
+      <main className="analytics-main">
         {error && (
           <div className="error-banner">
             <p>⚠️ {error}</p>
@@ -1519,8 +1440,7 @@ const AdminAnalytics = () => {
             </div>
           </div>
         </section>
-        </main>
-      </div>
+      </main>
     </div>
   );
 };
