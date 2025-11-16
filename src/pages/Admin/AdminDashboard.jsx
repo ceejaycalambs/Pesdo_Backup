@@ -490,9 +490,6 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="header-right">
-              <button onClick={fetchDashboardData} className="refresh-btn">
-                🔄 Refresh
-              </button>
             </div>
           </div>
         </header>

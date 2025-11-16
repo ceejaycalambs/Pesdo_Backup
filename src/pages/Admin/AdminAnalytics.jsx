@@ -1374,7 +1374,7 @@ const AdminAnalytics = () => {
 
   if (loading) {
     return (
-      <div className="admin-dashboard">
+      <div className="admin-analytics">
         <div className="loading-screen">
           <div className="loading-spinner"></div>
           <p>Loading analytics...</p>
@@ -1392,9 +1392,6 @@ const AdminAnalytics = () => {
             <p>Quick overview of key system metrics</p>
           </div>
           <div className="header-right">
-            <button onClick={handleRefresh} className="refresh-btn">
-              🔄 Refresh
-            </button>
             <button
               onClick={() => navigate(dashboardPath)}
               className="back-btn"

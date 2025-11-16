@@ -367,9 +367,6 @@ const UserManagement = () => {
             <button onClick={() => window.history.back()} className="back-btn">
               ← Back to Dashboard
             </button>
-            <button onClick={fetchUsers} className="refresh-btn">
-              🔄 Refresh
-            </button>
           </div>
         </div>
       </header>
