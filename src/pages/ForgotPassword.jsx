@@ -28,16 +28,28 @@ const ForgotPassword = () => {
 
     try {
       // Get the redirect URL based on user type
-      const redirectUrl = `${window.location.origin}/auth/callback?type=recovery`;
+      const redirectUrl = `${window.location.origin}/reset-password`;
       
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      console.log('🔐 Password reset request for:', email);
+      console.log('🔐 Redirect URL:', redirectUrl);
+      
+      const { data, error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,
       });
 
+      console.log('🔐 Password reset response:', { data, error: resetError });
+
       if (resetError) {
+        console.error('❌ Password reset error details:', {
+          message: resetError.message,
+          status: resetError.status,
+          code: resetError.code,
+          name: resetError.name
+        });
         throw resetError;
       }
 
+      console.log('✅ Password reset email sent successfully');
       setSuccess(true);
     } catch (err) {
       console.error('Password reset error:', err);
@@ -47,6 +59,13 @@ const ForgotPassword = () => {
         errorMessage = 'Too many requests. Please wait a moment and try again.';
       } else if (err.message?.includes('email')) {
         errorMessage = 'Please enter a valid email address.';
+      } else if (err.message?.includes('not found') || err.message?.includes('does not exist')) {
+        errorMessage = 'No account found with this email address. Please check your email and try again.';
+      } else if (err.message?.includes('SMTP') || err.message?.includes('email')) {
+        errorMessage = 'Email service error. Please contact support if this issue persists.';
+      } else {
+        // Show more detailed error for debugging
+        errorMessage = `Failed to send password reset email: ${err.message || 'Unknown error'}. Please check your email configuration or contact support.`;
       }
       
       setError(errorMessage);
