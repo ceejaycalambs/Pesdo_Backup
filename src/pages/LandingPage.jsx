@@ -60,6 +60,18 @@ const LandingPage = () => {
         }
     }, [currentUser, userData, authLoading, profileLoaded, navigate, auth]);
 
+    // Show loading screen while checking authentication or redirecting
+    if (authLoading || (currentUser && profileLoaded && userData)) {
+        return (
+            <div className="landing-page-loading">
+                <div className="landing-page-loading-content">
+                    <div className="landing-page-spinner"></div>
+                    <p>Loading...</p>
+                </div>
+            </div>
+        );
+    }
+
     useEffect(() => {
         const handleScroll = () => {
             setHeaderScrolled(window.scrollY > 10);
