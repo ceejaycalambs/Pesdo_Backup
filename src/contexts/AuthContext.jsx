@@ -842,30 +842,17 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const lastProcessedSession = useRef(null);
-  const loadingRef = useRef(loading);
-  const profileLoadedRef = useRef(profileLoaded);
-  
-  // Keep refs in sync with state
-  useEffect(() => {
-    loadingRef.current = loading;
-  }, [loading]);
-  
-  useEffect(() => {
-    profileLoadedRef.current = profileLoaded;
-  }, [profileLoaded]);
+  const isProcessingRef = useRef(false);
   
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', { event, hasUser: !!session?.user, isLoggingIn, accountTypeMismatch });
-      
-      // Skip if this is the same session we just processed
-      const sessionKey = session?.user?.id || 'no-user';
-      if (lastProcessedSession.current === sessionKey && event === 'INITIAL_SESSION') {
-        console.log('⏸️ Skipping duplicate INITIAL_SESSION event');
+      // Prevent concurrent processing
+      if (isProcessingRef.current) {
+        console.log('⏸️ Auth state change already processing, skipping...');
         return;
       }
-      lastProcessedSession.current = sessionKey;
+      
+      console.log('Auth state changed:', { event, hasUser: !!session?.user, isLoggingIn, accountTypeMismatch });
       
       // Skip processing if we're in the middle of a login process or had account type mismatch
       if (isLoggingIn || accountTypeMismatch) {
@@ -879,174 +866,127 @@ export function AuthProvider({ children }) {
         return;
       }
       
-      // Handle logout events
-      if (event === 'SIGNED_OUT') {
-        console.log('User signed out, clearing state');
-        setCurrentUser(null);
-        setUserData(null);
-        setProfileLoaded(false);
-        setLoading(false);
-        return;
-      }
+      isProcessingRef.current = true;
       
-      // Only update currentUser if it actually changed
-      setCurrentUser(prev => {
-        const newUser = session?.user || null;
-        if (prev?.id === newUser?.id) {
-          return prev; // Return same reference if unchanged
-        }
-        return newUser;
-      });
-      
-      if (session?.user) {
-        // Double-check that we're not in a mismatch state before fetching profile
-        if (accountTypeMismatch) {
-          console.log('⏸️ Skipping profile fetch due to account type mismatch');
-          if (loadingRef.current) {
-            setLoading(false);
-          }
+      try {
+        // Handle logout events
+        if (event === 'SIGNED_OUT') {
+          console.log('User signed out, clearing state');
+          setCurrentUser(null);
+          setUserData(null);
+          setProfileLoaded(false);
+          setLoading(false);
+          isProcessingRef.current = false;
           return;
         }
         
-        try {
-          console.log('Fetching user profile for:', session.user.email);
-          
-          (async () => {
-            try {
-              // Admin by id
-              let { data: ap, error: apErr } = await supabase
+        setCurrentUser(session?.user || null);
+        
+        if (session?.user) {
+          try {
+            console.log('Fetching user profile for:', session.user.email);
+            
+            // Admin by id
+            let { data: ap, error: apErr } = await supabase
+              .from('admin_profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle();
+
+            // Fallback: admin by email
+            if ((!ap || apErr) && session.user.email) {
+              const byEmail = await supabase
                 .from('admin_profiles')
                 .select('*')
-                .eq('id', session.user.id)
+                .eq('email', session.user.email)
                 .maybeSingle();
-
-              // Fallback: admin by email
-              if ((!ap || apErr) && session.user.email) {
-                const byEmail = await supabase
-                  .from('admin_profiles')
-                  .select('*')
-                  .eq('email', session.user.email)
-                  .maybeSingle();
-                if (!byEmail.error && byEmail.data) {
-                  ap = byEmail.data;
-                }
+              if (!byEmail.error && byEmail.data) {
+                ap = byEmail.data;
               }
-
-              if (ap) {
-                console.log('✅ Auth state change - Admin profile fetched:', ap);
-                const role = ap.role || 'admin';
-                const newUserData = {
-                  ...ap,
-                  userType: ap.userType || ap.usertype || 'admin',
-                  role,
-                  isSuperAdmin: role === 'super_admin'
-                };
-                // Only update if data actually changed
-                setUserData(prev => {
-                  if (prev?.id === newUserData.id && 
-                      prev?.userType === newUserData.userType &&
-                      prev?.role === newUserData.role) {
-                    return prev; // Return same reference if unchanged
-                  }
-                  return newUserData;
-                });
-                if (!profileLoadedRef.current) {
-                  setProfileLoaded(true);
-                }
-                return;
-              }
-
-              // Employer
-              const { data: ep } = await supabase
-                .from('employer_profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .maybeSingle();
-              if (ep) {
-                console.log('✅ Auth state change - Employer profile fetched:', ep);
-                const newUserData = { ...ep, userType: ep.usertype || 'employer' };
-                setUserData(prev => {
-                  if (prev?.id === newUserData.id && 
-                      prev?.userType === newUserData.userType) {
-                    return prev;
-                  }
-                  return newUserData;
-                });
-                setProfileLoaded(prev => prev ? prev : true);
-                return;
-              }
-
-              // Jobseeker
-              const { data: jp } = await supabase
-                .from('jobseeker_profiles')
-                .select('*')
-                .eq('id', session.user.id)
-                .maybeSingle();
-              if (jp) {
-                console.log('✅ Auth state change - Jobseeker profile fetched:', jp);
-                const newUserData = { ...jp, userType: jp.usertype || 'jobseeker' };
-                setUserData(prev => {
-                  if (prev?.id === newUserData.id && 
-                      prev?.userType === newUserData.userType) {
-                    return prev;
-                  }
-                  return newUserData;
-                });
-                setProfileLoaded(prev => prev ? prev : true);
-                return;
-              }
-
-              // Default
-              console.log('⚠️ Auth state change - No profile found in any table, using default');
-              const defaultUserData = {
-                id: session.user.id,
-                email: session.user.email,
-                userType: 'jobseeker'
-              };
-              setUserData(prev => {
-                if (prev?.id === defaultUserData.id && 
-                    prev?.userType === defaultUserData.userType) {
-                  return prev;
-                }
-                return defaultUserData;
-              });
-              setProfileLoaded(prev => prev ? prev : true);
-            } catch (err) {
-              console.log('❌ Auth state change - Profile fetch error:', err.message);
-              const errorUserData = {
-                id: session.user.id,
-                email: session.user.email,
-                userType: 'jobseeker'
-              };
-              setUserData(prev => {
-                if (prev?.id === errorUserData.id && 
-                    prev?.userType === errorUserData.userType) {
-                  return prev;
-                }
-                return errorUserData;
-              });
-              setProfileLoaded(prev => prev ? prev : true);
             }
-          })();
-        } catch (error) {
-          console.error('Error in auth state handler:', error);
-          // Keep basic user data, don't reset
+
+            if (ap) {
+              console.log('✅ Auth state change - Admin profile fetched:', ap);
+              const role = ap.role || 'admin';
+              setUserData({
+                ...ap,
+                userType: ap.userType || ap.usertype || 'admin',
+                role,
+                isSuperAdmin: role === 'super_admin'
+              });
+              setProfileLoaded(true);
+              setLoading(false);
+              isProcessingRef.current = false;
+              return;
+            }
+
+            // Employer
+            const { data: ep } = await supabase
+              .from('employer_profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle();
+            if (ep) {
+              console.log('✅ Auth state change - Employer profile fetched:', ep);
+              setUserData({ ...ep, userType: ep.usertype || 'employer' });
+              setProfileLoaded(true);
+              setLoading(false);
+              isProcessingRef.current = false;
+              return;
+            }
+
+            // Jobseeker
+            const { data: jp } = await supabase
+              .from('jobseeker_profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .maybeSingle();
+            if (jp) {
+              console.log('✅ Auth state change - Jobseeker profile fetched:', jp);
+              setUserData({ ...jp, userType: jp.usertype || 'jobseeker' });
+              setProfileLoaded(true);
+              setLoading(false);
+              isProcessingRef.current = false;
+              return;
+            }
+
+            // Default
+            console.log('⚠️ Auth state change - No profile found in any table, using default');
+            setUserData({
+              id: session.user.id,
+              email: session.user.email,
+              userType: 'jobseeker'
+            });
+            setProfileLoaded(true);
+            setLoading(false);
+            isProcessingRef.current = false;
+          } catch (err) {
+            console.log('❌ Auth state change - Profile fetch error:', err.message);
+            setUserData({
+              id: session.user.id,
+              email: session.user.email,
+              userType: 'jobseeker'
+            });
+            setProfileLoaded(true);
+            setLoading(false);
+            isProcessingRef.current = false;
+          }
+        } else {
+          setUserData(null);
+          setProfileLoaded(false);
+          setLoading(false);
+          isProcessingRef.current = false;
         }
-      } else {
-        setUserData(null);
-        setProfileLoaded(false);
-      }
-      
-      // Only set loading to false if it's currently true (prevents unnecessary updates)
-      if (loadingRef.current) {
+      } catch (error) {
+        console.error('Error in auth state handler:', error);
         setLoading(false);
+        isProcessingRef.current = false;
       }
     });
 
     return () => subscription?.unsubscribe();
   }, [isLoggingIn, accountTypeMismatch]);
 
-  // Create stable context value - only recalculate when actual data changes
   const value = useMemo(() => ({
     currentUser,
     userData,
@@ -1059,7 +999,7 @@ export function AuthProvider({ children }) {
     updateUserProfile,
     updateProfilePicture,
     refreshUserProfile
-  }), [currentUser, userData, loading, profileLoaded, signup, login, logout, updateUserProfile, updateProfilePicture, refreshUserProfile]);
+  }), [currentUser, userData, loading, profileLoaded]);
 
   return (
     <AuthContext.Provider value={value}>
