@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import './LandingPage.css';
 import Logo_pesdo from '../assets/Logo_pesdo.png';
 import Pesdo_Office from '../assets/Pesdo_Office.png';
@@ -24,40 +24,28 @@ const LandingPage = () => {
     const [employers, setEmployers] = useState([]);
     const [loadingEmployers, setLoadingEmployers] = useState(true);
     const hasRedirected = useRef(false);
-    const userTypeRef = useRef(null);
-
-    // Store userType in ref to avoid dependency issues
-    useEffect(() => {
-        if (userData?.userType) {
-            userTypeRef.current = userData.userType;
-        }
-    }, [userData?.userType]);
-
+    
+    // Memoize userType to prevent unnecessary re-renders
+    const userType = useMemo(() => userData?.userType, [userData?.userType]);
+    
     // Redirect authenticated users to their dashboard
     useEffect(() => {
-        if (!auth) return; // Ensure auth context is available
-        
-        // Wait for auth to finish loading
+        // Early returns to prevent unnecessary execution
         if (authLoading) return;
+        if (!profileLoaded) return;
+        if (!currentUser) return;
+        if (!userType) return;
+        if (location.pathname !== '/') return;
+        if (hasRedirected.current) return; // Critical: prevent multiple redirects
         
-        // Prevent multiple redirects
-        if (hasRedirected.current) return;
+        console.log('🔍 Landing page - User is logged in, redirecting to dashboard...');
+        console.log('User type:', userType);
         
-        // Don't redirect if already on a dashboard route
-        const currentPath = location.pathname;
-        if (currentPath === '/employer' || currentPath === '/jobseeker' || currentPath === '/dashboard') {
-            return;
-        }
+        // Mark as redirected immediately to prevent re-execution
+        hasRedirected.current = true;
         
-        // If user is authenticated and profile is loaded, redirect to dashboard
-        if (currentUser && profileLoaded && userTypeRef.current) {
-            console.log('🔍 Landing page - User is logged in, redirecting to dashboard...');
-            console.log('User type:', userTypeRef.current);
-            
-            hasRedirected.current = true;
-            
-            const userType = userTypeRef.current;
-            
+        // Use setTimeout to defer navigation and prevent render loop
+        const redirectTimer = setTimeout(() => {
             if (userType === 'employer') {
                 // Redirect employers to their dashboard
                 navigate('/employer', { replace: true });
@@ -79,10 +67,12 @@ const LandingPage = () => {
                     window.location.href = `https://${adminHost}/dashboard`;
                 }
             }
-        }
-        // Only depend on stable values
+        }, 0);
+        
+        return () => clearTimeout(redirectTimer);
+        // Use stable dependencies - currentUser?.id instead of currentUser object
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [!!currentUser, profileLoaded, authLoading, location.pathname]);
+    }, [authLoading, profileLoaded, currentUser?.id, userType, location.pathname]);
 
     // Show loading screen while checking authentication or redirecting
     const shouldShowLoading = authLoading || (currentUser && profileLoaded && userData?.userType && !hasRedirected.current);
