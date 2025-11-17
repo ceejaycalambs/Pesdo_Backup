@@ -29,13 +29,15 @@ function App() {
       ? window.location.hostname
       : '';
   const isAdminHost = host.startsWith('admin.');
+  // For localhost development: also treat /admin/* paths as admin routes
+  const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host.includes('localhost');
 
   return (
     <Router>
       <AuthProvider>
         {isAdminHost ? (
           <Routes>
-            {/* Admin-only host routes */}
+            {/* Admin-only host routes (production: admin.pesdosurigao.online) */}
             <Route path="/" element={<AdminLanding />} />
             <Route path="/dashboard" element={<AdminDashboard />} />
             <Route path="/users" element={<UserManagement />} />
@@ -63,6 +65,20 @@ function App() {
             <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            
+            {/* Admin routes for localhost development (path-based) */}
+            {isLocalhost && (
+              <>
+                <Route path="/admin" element={<AdminLanding />} />
+                <Route path="/admin/dashboard" element={<AdminDashboard />} />
+                <Route path="/admin/users" element={<UserManagement />} />
+                <Route path="/admin/jobs" element={<JobManagementSimplified />} />
+                <Route path="/admin/verification" element={<EmployerVerificationSimple />} />
+                <Route path="/admin/analytics" element={<AdminAnalytics />} />
+                <Route path="/admin/logs" element={<SuperAdminLogs />} />
+                <Route path="/admin/settings" element={<AdminManagement />} />
+              </>
+            )}
           </Routes>
         )}
       </AuthProvider>

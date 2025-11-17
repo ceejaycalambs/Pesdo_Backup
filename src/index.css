@@ -67,6 +67,47 @@ body.employer-dashboard-page {
     overflow-x: hidden;
 }
 
+/* Global thin scrollbar styling for all scrollable elements */
+/* Firefox scrollbar */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #888 #f1f1f1;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) scrollbar */
+*::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Override for elements that should have no scrollbar (already hidden) */
+.js-sidebar,
+.sidebar-nav,
+.js-sidebar::-webkit-scrollbar,
+.sidebar-nav::-webkit-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.js-sidebar::-webkit-scrollbar,
+.sidebar-nav::-webkit-scrollbar {
+    display: none;
+}
+
 /* Typography */
 h1 {
     font-size: 3.2em;
