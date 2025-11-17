@@ -4,6 +4,7 @@ import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
 import { useAuth } from '../../contexts/AuthContext.jsx';
 import { supabase } from '../../supabase.js';
 import { logActivity } from '../../utils/activityLogger';
+import { sendApplicationStatusSMS } from '../../services/smsService';
 import './EmployerDashboard.css';
 
 const NAV_ITEMS = [
@@ -798,6 +799,47 @@ const EmployerDashboard = () => {
       }
 
       await mutateApplicationStatus(application.id, nextStatus);
+
+      // Send SMS notification to jobseeker (non-blocking)
+      try {
+        // Fetch jobseeker profile to get phone number
+        const { data: jobseekerProfile } = await supabase
+          .from('jobseeker_profiles')
+          .select('phone, first_name, last_name')
+          .eq('id', application.jobseeker_id)
+          .single();
+
+        // Fetch job details
+        const { data: jobData } = await supabase
+          .from('jobs')
+          .select('position_title, employer_id')
+          .eq('id', application.job_id)
+          .single();
+
+        // Fetch employer profile for company name
+        const { data: employerProfile } = await supabase
+          .from('employer_profiles')
+          .select('business_name')
+          .eq('id', jobData?.employer_id || profile?.id)
+          .single();
+
+        if (jobseekerProfile?.phone && jobData) {
+          const jobseekerName = `${jobseekerProfile.first_name || ''} ${jobseekerProfile.last_name || ''}`.trim() || 'Jobseeker';
+          const companyName = employerProfile?.business_name || profile?.business_name || 'Company';
+          
+          await sendApplicationStatusSMS(
+            jobseekerProfile.phone,
+            jobseekerName,
+            jobData.position_title || 'Job Vacancy',
+            nextStatus,
+            companyName
+          );
+          console.log('✅ SMS notification sent to jobseeker');
+        }
+      } catch (smsError) {
+        // SMS failure should not block the main action
+        console.error('⚠️ Failed to send SMS notification (non-critical):', smsError);
+      }
 
       setJobApplications((prev) => {
         const updated = { ...prev };

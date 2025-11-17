@@ -4,6 +4,7 @@ import { supabase } from '../../supabase.js';
 import NotificationButton from '../../components/NotificationButton';
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
 import { logActivity } from '../../utils/activityLogger';
+import { sendNewApplicationSMS } from '../../services/smsService';
 import './JobseekerDashboard.css';
 
 const NAV_ITEMS = [
@@ -1296,6 +1297,33 @@ const JobseekerDashboard = () => {
             employerId: selectedJob.employer_id
           }
         });
+      }
+
+      // Send SMS notification to employer (non-blocking)
+      try {
+        // Fetch employer profile
+        const { data: employerProfile } = await supabase
+          .from('employer_profiles')
+          .select('mobile_number, business_name, contact_person_name')
+          .eq('id', selectedJob.employer_id)
+          .single();
+
+        if (employerProfile?.mobile_number && profile) {
+          const employerName = employerProfile.contact_person_name || employerProfile.business_name || 'Employer';
+          const jobseekerName = `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Jobseeker';
+          const jobTitle = selectedJob.title || selectedJob.position_title || 'Job Vacancy';
+
+          await sendNewApplicationSMS(
+            employerProfile.mobile_number,
+            employerName,
+            jobseekerName,
+            jobTitle
+          );
+          console.log('✅ SMS notification sent to employer');
+        }
+      } catch (smsError) {
+        // SMS failure should not block the main action
+        console.error('⚠️ Failed to send SMS notification (non-critical):', smsError);
       }
 
       const normalizedApplication = {

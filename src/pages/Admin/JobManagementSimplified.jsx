@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext.jsx';
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
 import NotificationButton from '../../components/NotificationButton';
 import { logActivity } from '../../utils/activityLogger';
+import { sendJobApprovalSMS } from '../../services/smsService';
 import './JobManagement.css';
 
 const JobManagementSimplified = () => {
@@ -893,6 +894,30 @@ const JobManagementSimplified = () => {
         console.error('Error creating notification:', notificationError);
       } else {
         console.log('✅ Notification created:', notificationData);
+      }
+
+      // Send SMS notification to employer (non-blocking)
+      try {
+        // Fetch employer profile
+        const { data: employerProfile } = await supabase
+          .from('employer_profiles')
+          .select('mobile_number, business_name, contact_person_name')
+          .eq('id', job.employer_id)
+          .single();
+
+        if (employerProfile?.mobile_number) {
+          const employerName = employerProfile.contact_person_name || employerProfile.business_name || 'Employer';
+          await sendJobApprovalSMS(
+            employerProfile.mobile_number,
+            employerName,
+            job.position_title,
+            'approved'
+          );
+          console.log('✅ SMS notification sent to employer');
+        }
+      } catch (smsError) {
+        // SMS failure should not block the main action
+        console.error('⚠️ Failed to send SMS notification (non-critical):', smsError);
       }
 
       // Log activity with admin name

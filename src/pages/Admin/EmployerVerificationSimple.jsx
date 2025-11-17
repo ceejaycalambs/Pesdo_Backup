@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabase.js';
 import { logActivity } from '../../utils/activityLogger';
 import { useAuth } from '../../contexts/AuthContext';
+import { sendSMS } from '../../services/smsService';
 import './EmployerVerification.css';
 
 const EmployerVerificationSimple = () => {
@@ -152,6 +153,33 @@ const EmployerVerificationSimple = () => {
             ]);
         } catch (notificationError) {
           console.error('❌ Error creating employer verification notification:', notificationError);
+        }
+      }
+
+      // Send SMS notification to employer (non-blocking)
+      if (verificationStatus === 'approved' || verificationStatus === 'rejected') {
+        try {
+          const { data: employerProfile } = await supabase
+            .from('employer_profiles')
+            .select('mobile_number, business_name, contact_person_name')
+            .eq('id', selectedEmployer.id)
+            .single();
+
+          if (employerProfile?.mobile_number) {
+            const employerName = employerProfile.contact_person_name || employerProfile.business_name || 'Employer';
+            const message = verificationStatus === 'approved'
+              ? `Hi ${employerName}! Your employer account has been APPROVED. You can now post job vacancies. - PESDO`
+              : `Hi ${employerName}! Your verification was REJECTED. Check dashboard for details. - PESDO`;
+
+            await sendSMS({
+              to: employerProfile.mobile_number,
+              message: message
+            });
+            console.log('✅ SMS notification sent to employer');
+          }
+        } catch (smsError) {
+          // SMS failure should not block the main action
+          console.error('⚠️ Failed to send SMS notification (non-critical):', smsError);
         }
       }
 
