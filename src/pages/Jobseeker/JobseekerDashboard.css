@@ -159,6 +159,29 @@
   padding: 32px;
   overflow-y: auto;
   margin-left: 260px;
+  height: 100vh;
+  /* Firefox scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: #888 #f1f1f1;
+}
+
+/* Custom scrollbar styling for main content (Webkit browsers) */
+.js-main::-webkit-scrollbar {
+  width: 12px;
+}
+
+.js-main::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.js-main::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 10px;
+}
+
+.js-main::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 .main-header {

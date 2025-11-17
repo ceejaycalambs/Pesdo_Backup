@@ -10,7 +10,7 @@ const LandingPage = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const auth = useAuth();
-    const { currentUser, userData, loading: authLoading, profileLoaded } = auth || {};
+    const { currentUser, userData, profileLoaded } = auth || {};
     const [headerScrolled, setHeaderScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [stats, setStats] = useState({
@@ -53,6 +53,12 @@ const LandingPage = () => {
         }
     }, [navigate]);
     
+    // Ensure body scrolling is enabled on landing page
+    useEffect(() => {
+        document.body.style.overflowY = 'auto';
+        document.body.style.height = '';
+    }, []);
+    
     // Effect 1: Reset redirect flag when pathname changes away from '/'
     useEffect(() => {
         if (location.pathname !== '/') {
@@ -60,40 +66,34 @@ const LandingPage = () => {
         }
     }, [location.pathname]);
     
-    // Effect 2: Check auth and redirect - only runs when auth state actually changes
+    // Effect 2: Check auth and redirect - handles persistent auth
     useEffect(() => {
-        // Only check on landing page
+        // Only check on landing page root
         if (location.pathname !== '/') return;
         
         // Prevent multiple redirects
         if (hasRedirected.current) return;
         
-        // Wait for auth to finish loading
-        if (authLoading) return;
-        if (!profileLoaded) return;
-        if (!currentUser) return;
-        if (!userType) return;
+        // If profile not loaded yet and user exists, wait
+        if (!profileLoaded && currentUser) {
+            console.log('⏳ Landing page - Waiting for profile to load...');
+            return;
+        }
         
-        // Perform redirect
+        // If no user or no profile loaded, user is not logged in
+        if (!currentUser || !userType || !profileLoaded) {
+            console.log('ℹ️ Landing page - No user logged in, showing landing page');
+            return;
+        }
+        
+        // User is logged in and profile loaded - redirect to dashboard
+        console.log('✅ Landing page - User authenticated, redirecting...');
         performRedirect(userType);
     // Use stable primitive values only
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [authLoading, profileLoaded, currentUser?.id, userType, location.pathname]);
+    }, [profileLoaded, currentUser?.id, userType, location.pathname]);
 
-    // Show loading screen while checking authentication or redirecting
-    const shouldShowLoading = authLoading || (currentUser && profileLoaded && userData?.userType && !hasRedirected.current);
-    
-    if (shouldShowLoading) {
-        return (
-            <div className="landing-page-loading">
-                <div className="landing-page-loading-content">
-                    <div className="landing-page-spinner"></div>
-                    <p>Loading...</p>
-                </div>
-            </div>
-        );
-    }
-
+    // Scroll handler - MUST be before any early returns
     useEffect(() => {
         const handleScroll = () => {
             setHeaderScrolled(window.scrollY > 10);
@@ -103,7 +103,7 @@ const LandingPage = () => {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
-    // Close mobile menu when clicking outside and prevent body scroll
+    // Mobile menu handler - MUST be before any early returns
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (mobileMenuOpen && !event.target.closest('.header') && !event.target.closest('.mobile-nav')) {
@@ -125,6 +125,7 @@ const LandingPage = () => {
         };
     }, [mobileMenuOpen]);
 
+    // Fetch stats - MUST be before any early returns
     useEffect(() => {
         const fetchStats = async () => {
             try {
@@ -239,6 +240,7 @@ const LandingPage = () => {
         fetchStats();
     }, []);
 
+    // Fetch employers - MUST be before any early returns
     useEffect(() => {
         const fetchEmployers = async () => {
             try {
@@ -280,6 +282,21 @@ const LandingPage = () => {
         
         fetchEmployers();
     }, []);
+
+    // Show loading screen while redirecting (after profile is loaded)
+    // This check happens AFTER all hooks to comply with Rules of Hooks
+    const shouldShowLoading = (currentUser && profileLoaded && userData?.userType && !hasRedirected.current);
+    
+    if (shouldShowLoading) {
+        return (
+            <div className="landing-page-loading">
+                <div className="landing-page-loading-content">
+                    <div className="landing-page-spinner"></div>
+                    <p>Loading...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="landing-page">

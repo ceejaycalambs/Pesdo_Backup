@@ -12,10 +12,313 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [accountTypeMismatch, setAccountTypeMismatch] = useState(false);
+  
+  // Refs for tracking auth state processing
+  const isProcessingRef = useRef(false);
+  const hasInitializedRef = useRef(false);
+  const checkExistingSessionRunningRef = useRef(false);
+  
+  // Reset profileLoaded when user changes (important for refresh)
+  useEffect(() => {
+    if (!currentUser) {
+      setProfileLoaded(false);
+    }
+  }, [currentUser]);
+
+  // Helper function to fetch user profile
+  // Checks jobseeker first (most common), then employer, then admin
+  const fetchUserProfile = async (userId, email) => {
+    try {
+      console.log('📥 Fetching profile for:', email, 'User ID:', userId);
+      
+      // Check jobseeker first (most common user type)
+      console.log('🔍 Querying jobseeker_profiles for ID:', userId);
+      
+      // Query with timeout protection
+      const queryPromise = supabase
+        .from('jobseeker_profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout after 20 seconds')), 20000)
+      );
+      
+      let jp, jpError;
+      try {
+        const result = await Promise.race([queryPromise, timeoutPromise]);
+        jp = result.data;
+        jpError = result.error;
+      } catch (err) {
+        if (err.message?.includes('timeout')) {
+          console.error('⏱️ Jobseeker query timed out after 20 seconds');
+          jpError = new Error('Query timeout - please check your connection');
+          jp = null;
+        } else {
+          console.error('❌ Unexpected error in jobseeker query:', err);
+          jpError = err;
+          jp = null;
+        }
+      }
+      
+      console.log('📊 Jobseeker query result:', { 
+        hasData: !!jp, 
+        hasError: !!jpError, 
+        error: jpError?.message,
+        dataKeys: jp ? Object.keys(jp) : null
+      });
+      
+      if (jpError) {
+        console.error('❌ Error fetching jobseeker profile:', jpError);
+        console.error('Error details:', {
+          message: jpError.message,
+          code: jpError.code,
+          details: jpError.details,
+          hint: jpError.hint
+        });
+        
+        // If it's a timeout, try a simpler query or continue with fallback
+        if (jpError.message?.includes('timeout')) {
+          console.warn('⚠️ Query timed out - this may indicate an RLS or network issue');
+          // Continue to check other profile types, but also set a basic profile so app can continue
+        }
+      }
+      
+      if (jp) {
+        console.log('✅ Jobseeker profile loaded:', jp);
+        setUserData({ ...jp, userType: jp.usertype || 'jobseeker' });
+        setProfileLoaded(true);
+        console.log('✅ profileLoaded set to true');
+        return true;
+      }
+      
+      // If query timed out but we have a user ID, set basic profile to allow app to continue
+      if (jpError?.message?.includes('timeout')) {
+        console.warn('⚠️ Query timed out - setting basic profile to allow app to continue');
+        setUserData({
+          id: userId,
+          email: email,
+          userType: 'jobseeker'
+        });
+        setProfileLoaded(true);
+        console.log('✅ Basic profile set (timeout fallback)');
+        return true; // Return true so app can continue
+      }
+      
+      console.log('ℹ️ No jobseeker profile found, checking employer...');
+
+      // Check employer with timeout protection
+      console.log('🔍 Querying employer_profiles for ID:', userId);
+      const employerQueryPromise = supabase
+        .from('employer_profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      const employerTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout after 20 seconds')), 20000)
+      );
+      
+      let ep, epError;
+      try {
+        const result = await Promise.race([employerQueryPromise, employerTimeoutPromise]);
+        ep = result.data;
+        epError = result.error;
+      } catch (err) {
+        if (err.message?.includes('timeout')) {
+          console.error('⏱️ Employer query timed out after 20 seconds');
+          epError = new Error('Query timeout - please check your connection');
+          ep = null;
+        } else {
+          console.error('❌ Unexpected error in employer query:', err);
+          epError = err;
+          ep = null;
+        }
+      }
+      
+      console.log('📊 Employer query result:', { 
+        hasData: !!ep, 
+        hasError: !!epError, 
+        error: epError?.message,
+        dataKeys: ep ? Object.keys(ep) : null
+      });
+      
+      if (epError) {
+        console.error('❌ Error fetching employer profile:', epError);
+        console.error('Error details:', {
+          message: epError.message,
+          code: epError.code,
+          details: epError.details,
+          hint: epError.hint
+        });
+        
+        if (epError.message?.includes('timeout')) {
+          console.warn('⚠️ Employer query timed out - this may indicate an RLS or network issue');
+        }
+      }
+      
+      if (ep) {
+        console.log('✅ Employer profile loaded:', ep);
+        setUserData({ ...ep, userType: ep.usertype || 'employer' });
+        setProfileLoaded(true);
+        console.log('✅ profileLoaded set to true');
+        return true;
+      }
+      
+      // If employer query timed out but we have a user ID, set basic profile to allow app to continue
+      if (epError?.message?.includes('timeout')) {
+        console.warn('⚠️ Employer query timed out - setting basic profile to allow app to continue');
+        setUserData({
+          id: userId,
+          email: email,
+          userType: 'employer'
+        });
+        setProfileLoaded(true);
+        console.log('✅ Basic employer profile set (timeout fallback)');
+        return true;
+      }
+      
+      // Check admin by id with timeout protection
+      console.log('ℹ️ No employer profile found, checking admin...');
+      console.log('🔍 Querying admin_profiles for ID:', userId);
+      
+      const adminQueryPromise = supabase
+        .from('admin_profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      const adminTimeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Query timeout after 20 seconds')), 20000)
+      );
+      
+      let ap, apErr;
+      try {
+        const result = await Promise.race([adminQueryPromise, adminTimeoutPromise]);
+        ap = result.data;
+        apErr = result.error;
+      } catch (err) {
+        if (err.message?.includes('timeout')) {
+          console.error('⏱️ Admin query timed out after 20 seconds');
+          apErr = new Error('Query timeout - please check your connection');
+          ap = null;
+        } else {
+          console.error('❌ Unexpected error in admin query:', err);
+          apErr = err;
+          ap = null;
+        }
+      }
+      
+      console.log('📊 Admin query result:', { 
+        hasData: !!ap, 
+        hasError: !!apErr, 
+        error: apErr?.message,
+        dataKeys: ap ? Object.keys(ap) : null
+      });
+
+      if (apErr) {
+        console.error('❌ Error fetching admin profile by ID:', apErr);
+        console.error('Error details:', {
+          message: apErr.message,
+          code: apErr.code,
+          details: apErr.details,
+          hint: apErr.hint
+        });
+        
+        if (apErr.message?.includes('timeout')) {
+          console.warn('⚠️ Admin query timed out - this may indicate an RLS or network issue');
+        }
+      }
+
+      // Fallback: admin by email with timeout protection
+      if ((!ap || apErr) && email) {
+        console.log('🔍 Trying admin profile by email:', email);
+        const adminEmailQueryPromise = supabase
+          .from('admin_profiles')
+          .select('*')
+          .eq('email', email)
+          .maybeSingle();
+        
+        const adminEmailTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Query timeout after 20 seconds')), 20000)
+        );
+        
+        try {
+          const result = await Promise.race([adminEmailQueryPromise, adminEmailTimeoutPromise]);
+          if (!result.error && result.data) {
+            ap = result.data;
+            apErr = null;
+            console.log('✅ Admin profile found by email');
+          } else if (result.error) {
+            console.error('Error fetching admin profile by email:', result.error);
+            if (!apErr) apErr = result.error;
+          }
+        } catch (err) {
+          if (err.message?.includes('timeout')) {
+            console.error('⏱️ Admin email query timed out after 20 seconds');
+            if (!apErr) apErr = new Error('Query timeout - please check your connection');
+          } else {
+            console.error('❌ Unexpected error in admin email query:', err);
+            if (!apErr) apErr = err;
+          }
+        }
+      }
+      
+      // If admin query timed out but we have a user ID, set basic profile to allow app to continue
+      if (apErr?.message?.includes('timeout') && !ap) {
+        console.warn('⚠️ Admin query timed out - setting basic profile to allow app to continue');
+        setUserData({
+          id: userId,
+          email: email,
+          userType: 'admin',
+          role: 'admin'
+        });
+        setProfileLoaded(true);
+        console.log('✅ Basic admin profile set (timeout fallback)');
+        return true;
+      }
+
+      if (ap) {
+        const role = ap.role || 'admin';
+        console.log('✅ Admin profile loaded:', { id: ap.id, email: ap.email, role });
+        setUserData({
+          ...ap,
+          userType: ap.userType || ap.usertype || 'admin',
+          role,
+          isSuperAdmin: role === 'super_admin'
+        });
+        setProfileLoaded(true);
+        console.log('✅ profileLoaded set to true');
+        return true;
+      }
+
+      // Default - no profile found, assume jobseeker
+      setUserData({
+        id: userId,
+        email: email,
+        userType: 'jobseeker'
+      });
+      setProfileLoaded(true);
+      return true;
+    } catch (err) {
+      console.error('Exception in fetchUserProfile:', err);
+      // Even on error, set basic user data so app can continue
+      setUserData({
+        id: userId,
+        email: email,
+        userType: 'jobseeker'
+      });
+      setProfileLoaded(true);
+      return false;
+    }
+  };
+
+  // Session restoration is handled by onAuthStateChange with INITIAL_SESSION event
+  // No separate restoreSession needed - Supabase handles this automatically
 
   // Sign up function
   async function signup(email, password, userType, additionalData = {}) {
@@ -454,9 +757,8 @@ export function AuthProvider({ children }) {
       console.log('Starting login process for email:', email);
       console.log('Supabase URL:', supabase.supabaseUrl);
       
-      // Clear any existing session first to prevent conflicts
-      console.log('Clearing any existing session...');
-      await supabase.auth.signOut();
+      // Don't clear session - Supabase will handle session replacement automatically
+      // Only clear admin localStorage items
       
       // Clear any admin localStorage items to prevent conflicts
       localStorage.removeItem('admin_authenticated');
@@ -549,104 +851,49 @@ export function AuthProvider({ children }) {
         console.log('Setting basic user data for:', data.user.email);
         
         // Try admin first, then employer, then jobseeker
-        let adminResult = await supabase
-          .from('admin_profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .maybeSingle();
-
-        // If not found by id, try by email (in case of legacy/migrated rows)
-        if ((!adminResult || !adminResult.data) && email) {
-          const byEmail = await supabase
-            .from('admin_profiles')
-            .select('*')
-            .eq('email', email)
-            .maybeSingle();
-          if (byEmail && byEmail.data) {
-            adminResult = byEmail;
-          }
-        }
-
-        if (adminResult && adminResult.data) {
-          console.log('✅ Admin profile fetched:', adminResult.data);
-          const userType = adminResult.data.usertype || 'admin';
-          const adminRole = adminResult.data.role || 'admin';
-          // Preserve role and a convenience boolean
-          setUserData({
-            ...adminResult.data,
-            userType: userType,
-            role: adminRole,
-            isSuperAdmin: adminRole === 'super_admin'
-          });
-          setProfileLoaded(true);
+        // Use fetchUserProfile for consistency and timeout protection
+        const profileFetched = await fetchUserProfile(data.user.id, email);
+        
+        // Wait a moment for state to update, then get the userType from state
+        // Since fetchUserProfile sets userData state, we need to check it after a brief delay
+        // or we can determine userType from the expectedUserType and profile fetch result
+        let logUserType = expectedUserType || 'jobseeker';
+        
+        // If profile was fetched, determine userType from the result
+        // fetchUserProfile sets userData state, so we'll check it after state updates
+        // For now, use expectedUserType, but we'll also check userData after a brief delay
+        if (profileFetched) {
+          // Use a small delay to allow state to update, then check userData
+          await new Promise(resolve => setTimeout(resolve, 100));
           
-          // Log successful login
-          await logLogin({
-            userId: data.user.id,
-            userType: adminRole === 'super_admin' ? 'super_admin' : 'admin',
-            email: email,
-            status: 'success'
-          });
-        } else {
-          // If not admin, try employer
-          const employerResult = await supabase
-            .from('employer_profiles')
-            .select('*')
-            .eq('id', data.user.id)
-            .maybeSingle();
-
-          if (employerResult && !employerResult.error && employerResult.data) {
-            console.log('✅ Employer profile fetched:', employerResult.data);
-            const userType = employerResult.data.usertype || 'employer';
-            setUserData({...employerResult.data, userType});
-            setProfileLoaded(true);
+          // Check userData state to get the actual userType (may be from timeout fallback)
+          const currentUserData = userData;
+          if (currentUserData) {
+            const userTypeForLog = currentUserData.userType || expectedUserType || 'jobseeker';
+            const roleForLog = currentUserData.role;
             
-            // Log successful login
-            await logLogin({
-              userId: data.user.id,
-              userType: 'employer',
-              email: email,
-              status: 'success'
-            });
-          } else {
-            // If not employer, try jobseeker
-            const jobseekerResult = await supabase
-              .from('jobseeker_profiles')
-              .select('*')
-              .eq('id', data.user.id)
-              .maybeSingle();
-
-            if (jobseekerResult && !jobseekerResult.error && jobseekerResult.data) {
-              console.log('✅ Jobseeker profile fetched:', jobseekerResult.data);
-              const userType = jobseekerResult.data.usertype || 'jobseeker';
-              setUserData({...jobseekerResult.data, userType});
-              setProfileLoaded(true);
-              
-              // Log successful login
-              await logLogin({
-                userId: data.user.id,
-                userType: 'jobseeker',
-                email: email,
-                status: 'success'
-              });
+            // Determine the correct userType for login log
+            if (roleForLog === 'super_admin') {
+              logUserType = 'super_admin';
+            } else if (userTypeForLog === 'admin' || roleForLog === 'admin') {
+              logUserType = 'admin';
+            } else if (userTypeForLog === 'employer') {
+              logUserType = 'employer';
             } else {
-              console.log('❌ No profile found in any table');
-              
-              if (expectedUserType === 'admin') {
-                // Do not auto-signout; surface a clear error for admins
-                throw new Error('Admin profile not found for this account. Please ensure your admin profile exists and matches your auth email. If this is a migrated account, ask a super admin to verify your admin profile.');
-              }
-              
-              // Set basic user data with default userType (for new users)
-              setUserData({
-                id: data.user.id,
-                email: data.user.email,
-                userType: 'jobseeker' // Default to jobseeker if no profile found
-              });
-              setProfileLoaded(true);
+              logUserType = 'jobseeker';
             }
           }
         }
+        
+        // Log successful login - this will always happen even if timeout fallback was used
+        await logLogin({
+          userId: data.user.id,
+          userType: logUserType,
+          email: email,
+          status: 'success'
+        });
+        
+        console.log('✅ Login logged successfully for:', logUserType);
       }
       
       console.log('Login process completed successfully');
@@ -842,27 +1089,91 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const isProcessingRef = useRef(false);
-  
+  // First, check for existing session on mount (before setting up listener)
+  useEffect(() => {
+    let isMounted = true;
+    
+    const checkExistingSession = async () => {
+      try {
+        checkExistingSessionRunningRef.current = true;
+        console.log('🔍 Checking for existing session in localStorage...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!isMounted) {
+          checkExistingSessionRunningRef.current = false;
+          return;
+        }
+        
+        if (error) {
+          console.error('❌ Error getting session:', error);
+          checkExistingSessionRunningRef.current = false;
+          return;
+        }
+        
+        if (session?.user) {
+          // Skip if we already have this user's profile loaded
+          if (hasInitializedRef.current && currentUser?.id === session.user.id && profileLoaded) {
+            console.log('ℹ️ Profile already loaded, skipping checkExistingSession fetch');
+            checkExistingSessionRunningRef.current = false;
+            return;
+          }
+          console.log('✅ Found existing session on mount, fetching profile:', session.user.email);
+          setCurrentUser(session.user);
+          setProfileLoaded(false); // Reset to ensure fresh fetch
+          const profileFetched = await fetchUserProfile(session.user.id, session.user.email);
+          console.log('📊 checkExistingSession - Profile fetch completed:', profileFetched ? 'Success' : 'Failed');
+          if (isMounted) {
+            hasInitializedRef.current = true;
+          }
+        } else {
+          console.log('ℹ️ No existing session found on mount');
+        }
+        checkExistingSessionRunningRef.current = false;
+      } catch (err) {
+        console.error('❌ Error checking existing session:', err);
+        checkExistingSessionRunningRef.current = false;
+      }
+    };
+    
+    checkExistingSession();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Run once on mount
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Prevent concurrent processing
-      if (isProcessingRef.current) {
-        console.log('⏸️ Auth state change already processing, skipping...');
-        return;
-      }
-      
-      console.log('Auth state changed:', { event, hasUser: !!session?.user, isLoggingIn, accountTypeMismatch });
+      console.log('🔄 Auth state changed:', event, 'Has user:', !!session?.user);
       
       // Skip processing if we're in the middle of a login process or had account type mismatch
       if (isLoggingIn || accountTypeMismatch) {
-        console.log('⏸️ Skipping auth state change processing - login in progress or account type mismatch');
+        console.log('⏸️ Skipping - login in progress or account type mismatch');
         return;
       }
       
       // If this is a SIGNED_OUT event after a mismatch, don't process it
       if (event === 'SIGNED_OUT' && accountTypeMismatch) {
-        console.log('⏸️ Skipping SIGNED_OUT processing due to account type mismatch');
+        return;
+      }
+      
+      // Skip SIGNED_IN during initialization if:
+      // 1. Profile is already loaded for this user, OR
+      // 2. checkExistingSession is currently running (will handle the profile fetch)
+      if (event === 'SIGNED_IN') {
+        if (hasInitializedRef.current && currentUser?.id === session?.user?.id && profileLoaded) {
+          console.log('ℹ️ Profile already loaded, skipping SIGNED_IN during initialization');
+          return;
+        }
+        if (checkExistingSessionRunningRef.current) {
+          console.log('ℹ️ checkExistingSession is running, skipping SIGNED_IN to avoid duplicate fetch');
+          return;
+        }
+      }
+      
+      // Prevent concurrent processing (but always allow INITIAL_SESSION to process on refresh)
+      if (isProcessingRef.current && event !== 'INITIAL_SESSION') {
+        console.log('⏸️ Already processing, skipping:', event);
         return;
       }
       
@@ -875,7 +1186,50 @@ export function AuthProvider({ children }) {
           setCurrentUser(null);
           setUserData(null);
           setProfileLoaded(false);
-          setLoading(false);
+          hasInitializedRef.current = false;
+          isProcessingRef.current = false;
+          return;
+        }
+        
+        // Handle token refresh (automatic - Supabase refreshes tokens before expiry)
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('✅ Token refreshed automatically');
+          isProcessingRef.current = false;
+          return;
+        }
+        
+        // Handle INITIAL_SESSION (page refresh) - this is critical for persistent auth
+        if (event === 'INITIAL_SESSION') {
+          console.log('🔄 INITIAL_SESSION - Restoring session on page refresh');
+          if (session?.user) {
+            // Skip if we already have this user's profile loaded
+            if (hasInitializedRef.current && currentUser?.id === session.user.id && profileLoaded) {
+              console.log('ℹ️ Profile already loaded for this user, skipping INITIAL_SESSION fetch');
+              isProcessingRef.current = false;
+              return;
+            }
+            console.log('✅ Session found, fetching profile for:', session.user.email);
+            setCurrentUser(session.user);
+            setProfileLoaded(false); // Reset to ensure fresh fetch
+            const profileFetched = await fetchUserProfile(session.user.id, session.user.email);
+            console.log('📊 INITIAL_SESSION - Profile fetch completed:', profileFetched ? 'Success' : 'Failed');
+            hasInitializedRef.current = true;
+            isProcessingRef.current = false;
+            return;
+          } else {
+            console.log('ℹ️ No session found on INITIAL_SESSION');
+            setCurrentUser(null);
+            setUserData(null);
+            setProfileLoaded(false);
+            isProcessingRef.current = false;
+            return;
+          }
+        }
+        
+        // Handle SIGNED_IN events (explicit login)
+        // Skip if profile is already loaded for this user
+        if (session?.user && hasInitializedRef.current && currentUser?.id === session.user.id && profileLoaded) {
+          console.log('ℹ️ Profile already loaded for SIGNED_IN, skipping fetch');
           isProcessingRef.current = false;
           return;
         }
@@ -883,103 +1237,19 @@ export function AuthProvider({ children }) {
         setCurrentUser(session?.user || null);
         
         if (session?.user) {
-          try {
-            console.log('Fetching user profile for:', session.user.email);
-            
-            // Admin by id
-            let { data: ap, error: apErr } = await supabase
-              .from('admin_profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle();
-
-            // Fallback: admin by email
-            if ((!ap || apErr) && session.user.email) {
-              const byEmail = await supabase
-                .from('admin_profiles')
-                .select('*')
-                .eq('email', session.user.email)
-                .maybeSingle();
-              if (!byEmail.error && byEmail.data) {
-                ap = byEmail.data;
-              }
-            }
-
-            if (ap) {
-              console.log('✅ Auth state change - Admin profile fetched:', ap);
-              const role = ap.role || 'admin';
-              setUserData({
-                ...ap,
-                userType: ap.userType || ap.usertype || 'admin',
-                role,
-                isSuperAdmin: role === 'super_admin'
-              });
-              setProfileLoaded(true);
-              setLoading(false);
-              isProcessingRef.current = false;
-              return;
-            }
-
-            // Employer
-            const { data: ep } = await supabase
-              .from('employer_profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle();
-            if (ep) {
-              console.log('✅ Auth state change - Employer profile fetched:', ep);
-              setUserData({ ...ep, userType: ep.usertype || 'employer' });
-              setProfileLoaded(true);
-              setLoading(false);
-              isProcessingRef.current = false;
-              return;
-            }
-
-            // Jobseeker
-            const { data: jp } = await supabase
-              .from('jobseeker_profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .maybeSingle();
-            if (jp) {
-              console.log('✅ Auth state change - Jobseeker profile fetched:', jp);
-              setUserData({ ...jp, userType: jp.usertype || 'jobseeker' });
-              setProfileLoaded(true);
-              setLoading(false);
-              isProcessingRef.current = false;
-              return;
-            }
-
-            // Default
-            console.log('⚠️ Auth state change - No profile found in any table, using default');
-            setUserData({
-              id: session.user.id,
-              email: session.user.email,
-              userType: 'jobseeker'
-            });
-            setProfileLoaded(true);
-            setLoading(false);
-            isProcessingRef.current = false;
-          } catch (err) {
-            console.log('❌ Auth state change - Profile fetch error:', err.message);
-            setUserData({
-              id: session.user.id,
-              email: session.user.email,
-              userType: 'jobseeker'
-            });
-            setProfileLoaded(true);
-            setLoading(false);
-            isProcessingRef.current = false;
-          }
+          console.log('🔄 SIGNED_IN - Fetching profile for:', session.user.email);
+          const profileFetched = await fetchUserProfile(session.user.id, session.user.email);
+          console.log('📊 SIGNED_IN - Profile fetch completed:', profileFetched ? 'Success' : 'Failed');
+          hasInitializedRef.current = true;
+          isProcessingRef.current = false;
         } else {
+          // No session - clear state
           setUserData(null);
           setProfileLoaded(false);
-          setLoading(false);
           isProcessingRef.current = false;
         }
       } catch (error) {
-        console.error('Error in auth state handler:', error);
-        setLoading(false);
+        console.error('❌ Error in auth state handler:', error);
         isProcessingRef.current = false;
       }
     });
@@ -990,7 +1260,6 @@ export function AuthProvider({ children }) {
   const value = useMemo(() => ({
     currentUser,
     userData,
-    loading,
     profileLoaded,
     signup,
     register: signup, // Alias for compatibility
@@ -999,7 +1268,7 @@ export function AuthProvider({ children }) {
     updateUserProfile,
     updateProfilePicture,
     refreshUserProfile
-  }), [currentUser, userData, loading, profileLoaded]);
+  }), [currentUser, userData, profileLoaded]);
 
   return (
     <AuthContext.Provider value={value}>

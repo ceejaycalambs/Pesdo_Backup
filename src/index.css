@@ -42,7 +42,7 @@ body {
     min-width: 320px;
     min-height: 100vh;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: auto; /* Default: allow body scrolling */
     touch-action: manipulation;
     overscroll-behavior: none;
     position: relative;
@@ -50,6 +50,14 @@ body {
     margin: 0;
     padding: 0;
     -webkit-overflow-scrolling: touch;
+}
+
+/* Disable body scrolling on dashboard pages to prevent double scrollbars */
+body.dashboard-page,
+body.js-dashboard-page,
+body.employer-dashboard-page {
+    overflow-y: hidden;
+    height: 100vh;
 }
 
 #root {

@@ -68,8 +68,28 @@ const resolveEmploymentStatus = (value) => {
 };
 
 const JobseekerDashboard = () => {
-  const { currentUser, userData, logout } = useAuth();
+  const { currentUser, userData, logout, profileLoaded } = useAuth();
   const jobseekerId = currentUser?.id;
+  
+  // Disable body scrolling to prevent double scrollbars
+  useEffect(() => {
+    document.body.style.overflowY = 'hidden';
+    document.body.style.height = '100vh';
+    return () => {
+      document.body.style.overflowY = '';
+      document.body.style.height = '';
+    };
+  }, []);
+  
+  // Wait for profile to load before proceeding
+  useEffect(() => {
+    if (!profileLoaded) return;
+    if (!currentUser || !userData) {
+      // If profile loaded but no user, redirect to login
+      window.location.href = '/login/jobseeker';
+      return;
+    }
+  }, [profileLoaded, currentUser, userData]);
 
   const {
     notifications: jobseekerNotifications,
@@ -155,9 +175,10 @@ const JobseekerDashboard = () => {
   const [applyFeedback, setApplyFeedback] = useState({ type: null, text: '' });
 
   useEffect(() => {
-    if (!jobseekerId) return;
+    // Wait for profile to be loaded and user ID to be available
+    if (!profileLoaded || !jobseekerId) return;
     fetchDashboardData();
-  }, [jobseekerId]);
+  }, [jobseekerId, profileLoaded]);
 
   useEffect(() => {
     if (!showJobModal) return;

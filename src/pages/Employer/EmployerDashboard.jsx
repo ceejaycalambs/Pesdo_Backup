@@ -114,6 +114,16 @@ const defaultJobForm = {
 const EmployerDashboard = () => {
   const { currentUser, logout } = useAuth();
   const employerId = currentUser?.id;
+  
+  // Disable body scrolling to prevent double scrollbars
+  useEffect(() => {
+    document.body.style.overflowY = 'hidden';
+    document.body.style.height = '100vh';
+    return () => {
+      document.body.style.overflowY = '';
+      document.body.style.height = '';
+    };
+  }, []);
 
   const {
     notifications: employerNotifications,
