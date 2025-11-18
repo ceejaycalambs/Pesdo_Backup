@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import NotificationButton from '../../components/NotificationButton';
 import { useRealtimeNotifications } from '../../hooks/useRealtimeNotifications';
 import { useAuth } from '../../contexts/AuthContext.jsx';
@@ -169,14 +169,76 @@ const EmployerDashboard = () => {
   const { currentUser, logout } = useAuth();
   const employerId = currentUser?.id;
   
-  // Disable body scrolling to prevent double scrollbars
+  const [activeTab, setActiveTab] = useState('profile');
+  const [jobStatusTab, setJobStatusTab] = useState('pending'); // 'pending', 'approved', 'rejected'
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // Disable body scrolling on desktop, enable on mobile
   useEffect(() => {
-    document.body.style.overflowY = 'hidden';
-    document.body.style.height = '100vh';
+    const handleResize = () => {
+      const isMobileNow = window.innerWidth <= 768;
+      if (!isMobileNow) {
+        document.body.style.overflowY = 'hidden';
+        document.body.style.height = '100vh';
+      } else {
+        document.body.style.overflowY = 'auto';
+        document.body.style.height = '';
+      }
+    };
+    
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
     return () => {
       document.body.style.overflowY = '';
       document.body.style.height = '';
+      window.removeEventListener('resize', handleResize);
     };
+  }, []);
+
+  // Close mobile menu when clicking overlay or pressing Escape
+  useEffect(() => {
+    const handleOverlayClick = (e) => {
+      if (e.target && e.target.classList.contains('js-sidebar-overlay')) {
+        setMobileMenuOpen(false);
+      }
+    };
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        setMobileMenuOpen(false);
+      }
+    };
+    
+    // Use capture phase to ensure overlay click is handled
+    document.addEventListener('click', handleOverlayClick, true);
+    document.addEventListener('keydown', handleEscape);
+    
+    return () => {
+      document.removeEventListener('click', handleOverlayClick, true);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [mobileMenuOpen]);
+
+  // Ensure sidebar is closed on mobile by default
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        setMobileMenuOpen(false);
+      }
+    };
+    
+    // Check on mount
+    checkMobile();
+    
+    // Check on resize
+    const handleResize = () => {
+      checkMobile();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const {
@@ -190,8 +252,6 @@ const EmployerDashboard = () => {
   useEffect(() => {
     requestEmployerNotificationPermission();
   }, []);
-
-  const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState('');
@@ -232,8 +292,10 @@ const EmployerDashboard = () => {
 
   const [pendingJobs, setPendingJobs] = useState([]);
   const [approvedJobs, setApprovedJobs] = useState([]);
+  const [rejectedJobs, setRejectedJobs] = useState([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError] = useState('');
+  const [jobSearchQuery, setJobSearchQuery] = useState('');
   const [jobApplications, setJobApplications] = useState({});
   const [jobDetailsOpen, setJobDetailsOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
@@ -243,6 +305,51 @@ const EmployerDashboard = () => {
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   const [selectedApplicationProfile, setSelectedApplicationProfile] = useState(null);
   const [loadingApplicationProfile, setLoadingApplicationProfile] = useState(false);
+
+  const filterJobsByQuery = useCallback(
+    (jobs) => {
+      if (!jobSearchQuery.trim()) {
+        return jobs;
+      }
+      const query = jobSearchQuery.toLowerCase().trim();
+      return jobs.filter((job) => {
+        const fields = [
+          job.title,
+          job.position_title,
+          job.location,
+          job.place_of_work,
+          job.work_location,
+          job.job_description,
+          job.description,
+          job.nature_of_work,
+          job.employment_type,
+          job.job_type,
+          job.salary_range,
+          job.salary,
+          job.company_name
+        ]
+          .filter(Boolean)
+          .map((value) => String(value).toLowerCase());
+        return fields.some((field) => field.includes(query));
+      });
+    },
+    [jobSearchQuery]
+  );
+
+  const filteredPendingJobs = useMemo(
+    () => filterJobsByQuery(pendingJobs),
+    [filterJobsByQuery, pendingJobs]
+  );
+
+  const filteredApprovedJobs = useMemo(
+    () => filterJobsByQuery(approvedJobs),
+    [filterJobsByQuery, approvedJobs]
+  );
+
+  const filteredRejectedJobs = useMemo(
+    () => filterJobsByQuery(rejectedJobs),
+    [filterJobsByQuery, rejectedJobs]
+  );
 
   const extractStoragePathFromUrl = (publicUrl) => {
     if (!publicUrl) return null;
@@ -361,10 +468,14 @@ const EmployerDashboard = () => {
         const status = (job.status || '').toLowerCase();
         return status === 'approved' || status === 'active';
       });
+      const rejected = approvedRows.filter((job) => {
+        const status = (job.status || '').toLowerCase();
+        return status === 'rejected';
+      });
 
       const jobIds = Array.from(
         new Set(
-          [...pending, ...approved]
+          [...pending, ...approved, ...rejected]
             .map((job) => job.id)
             .filter(Boolean)
         )
@@ -410,6 +521,7 @@ const EmployerDashboard = () => {
 
       setPendingJobs(pending);
       setApprovedJobs(approved);
+      setRejectedJobs(rejected);
       setJobApplications((prev) => {
         const next = {};
 
@@ -1630,8 +1742,12 @@ const EmployerDashboard = () => {
 
     const hasPending = (pendingJobs || []).length > 0;
     const hasApproved = (approvedJobs || []).length > 0;
+    const hasRejected = (rejectedJobs || []).length > 0;
+    const hasFilteredPending = filteredPendingJobs.length > 0;
+    const hasFilteredApproved = filteredApprovedJobs.length > 0;
+    const hasFilteredRejected = filteredRejectedJobs.length > 0;
 
-    if (!hasPending && !hasApproved) {
+    if (!hasPending && !hasApproved && !hasRejected) {
       return (
         <div className="empty-state">
           <div className="empty-icon">📋</div>
@@ -1715,7 +1831,7 @@ const EmployerDashboard = () => {
                 <span className="meta-value">{locationLabel}</span>
               </div>
               <div className="meta-item">
-                <span className="meta-label">💼 Nature</span>
+                <span className="meta-label">💼 Nature of Work</span>
                 <span className="meta-value">{natureLabel}</span>
               </div>
               <div className="meta-item">
@@ -1774,26 +1890,99 @@ const EmployerDashboard = () => {
       );
     };
 
+    const getCurrentJobs = () => {
+      switch (jobStatusTab) {
+        case 'pending':
+          return {
+            jobs: filteredPendingJobs,
+            hasJobs: hasFilteredPending,
+            statusLabel: 'Pending',
+            statusClass: 'pending',
+            emptyMessage: jobSearchQuery ? 'No pending jobs match your search.' : 'No pending jobs at this time.'
+          };
+        case 'approved':
+          return {
+            jobs: filteredApprovedJobs,
+            hasJobs: hasFilteredApproved,
+            statusLabel: 'Approved',
+            statusClass: 'approved',
+            emptyMessage: jobSearchQuery ? 'No approved jobs match your search.' : 'No approved jobs at this time.'
+          };
+        case 'rejected':
+          return {
+            jobs: filteredRejectedJobs,
+            hasJobs: hasFilteredRejected,
+            statusLabel: 'Rejected',
+            statusClass: 'rejected',
+            emptyMessage: jobSearchQuery ? 'No rejected jobs match your search.' : 'No rejected jobs at this time.'
+          };
+        default:
+          return {
+            jobs: [],
+            hasJobs: false,
+            statusLabel: 'Pending',
+            statusClass: 'pending',
+            emptyMessage: 'No jobs found.'
+          };
+      }
+    };
+
+    const currentJobs = getCurrentJobs();
+
     return (
       <>
-        <div className="panel-stack">
-          {hasPending ? (
-            <section className="dashboard-panel">
-              <h2>Pending Review</h2>
-              <div className="cards-row">
-                {pendingJobs.map((job) => renderJobCard(job, 'Pending', 'pending'))}
-              </div>
-            </section>
-          ) : null}
+        <div className="panel-stack manage-panel-stack">
+          {/* Job Status Tabs */}
+          <div className="job-status-tabs">
+            <button
+              type="button"
+              className={`job-status-tab ${jobStatusTab === 'pending' ? 'active' : ''}`}
+              onClick={() => setJobStatusTab('pending')}
+            >
+              <span>Pending Review</span>
+              {pendingJobs.length > 0 && (
+                <span className="tab-count">{pendingJobs.length}</span>
+              )}
+            </button>
+            <button
+              type="button"
+              className={`job-status-tab ${jobStatusTab === 'approved' ? 'active' : ''}`}
+              onClick={() => setJobStatusTab('approved')}
+            >
+              <span>Approved</span>
+              {approvedJobs.length > 0 && (
+                <span className="tab-count">{approvedJobs.length}</span>
+              )}
+            </button>
+            <button
+              type="button"
+              className={`job-status-tab ${jobStatusTab === 'rejected' ? 'active' : ''}`}
+              onClick={() => setJobStatusTab('rejected')}
+            >
+              <span>Rejected</span>
+              {rejectedJobs.length > 0 && (
+                <span className="tab-count">{rejectedJobs.length}</span>
+              )}
+            </button>
+          </div>
 
-          {hasApproved ? (
-            <section className="dashboard-panel">
-              <h2>Approved Vacancies</h2>
+          {/* Current Tab Content */}
+          <section className="dashboard-panel">
+            <h2>
+              {jobStatusTab === 'pending' ? 'Pending Review' :
+               jobStatusTab === 'approved' ? 'Approved Vacancies' :
+               'Rejected Vacancies'}
+            </h2>
+            {currentJobs.hasJobs ? (
               <div className="cards-row">
-                {approvedJobs.map((job) => renderJobCard(job, 'Approved', 'approved'))}
+                {currentJobs.jobs.map((job) => renderJobCard(job, currentJobs.statusLabel, currentJobs.statusClass))}
               </div>
-            </section>
-          ) : null}
+            ) : (
+              <div className="empty-state compact">
+                <p>{currentJobs.emptyMessage}</p>
+              </div>
+            )}
+          </section>
         </div>
 
         {renderJobDetailsModal()}
@@ -2150,8 +2339,45 @@ const EmployerDashboard = () => {
 
   return (
     <div className="js-dashboard employer-dashboard">
-      <aside className="js-sidebar">
+      <button 
+        type="button"
+        className={`js-mobile-menu-toggle ${mobileMenuOpen ? 'menu-open' : ''}`}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setMobileMenuOpen(prev => !prev);
+        }}
+        onTouchEnd={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setMobileMenuOpen(prev => !prev);
+        }}
+        aria-label="Toggle menu"
+        style={{ zIndex: 1001, touchAction: 'manipulation' }}
+      >
+        <span style={{ fontSize: '20px', lineHeight: '1', display: 'block', pointerEvents: 'none', userSelect: 'none' }}>
+          ☰
+        </span>
+      </button>
+      <div 
+        className={`js-sidebar-overlay ${mobileMenuOpen ? 'open' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+      />
+      <aside className={`js-sidebar ${mobileMenuOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
+          <button
+            type="button"
+            className="sidebar-close-btn"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMobileMenuOpen(false);
+            }}
+            aria-label="Close menu"
+            style={{ display: 'none' }}
+          >
+            ✕
+          </button>
           <div className="brand-mark">Employer Dashboard</div>
           <div className="user-snapshot">
             <div className="user-name">{profileDisplayName}</div>
@@ -2167,7 +2393,10 @@ const EmployerDashboard = () => {
               key={item.key}
               type="button"
               className={`nav-item ${activeTab === item.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(item.key)}
+              onClick={() => {
+                setActiveTab(item.key);
+                setMobileMenuOpen(false);
+              }}
             >
               <span className="nav-icon">{item.icon}</span>
               <span>{item.label}</span>
@@ -2176,7 +2405,14 @@ const EmployerDashboard = () => {
         </nav>
 
         <div className="sidebar-footer">
-          <button type="button" className="outline-btn full" onClick={() => logout()}>
+          <button 
+            type="button" 
+            className="outline-btn full" 
+            onClick={() => {
+              setMobileMenuOpen(false);
+              logout();
+            }}
+          >
             Logout
           </button>
         </div>
@@ -2185,24 +2421,40 @@ const EmployerDashboard = () => {
       <main className="js-main">
         <header className="main-header">
           <div className="header-top">
-            <div className="header-info">
-              <h1>
-                {activeTab === 'profile' && 'Company Profile'}
-                {activeTab === 'documents' && 'Documentary Requirements'}
-                {activeTab === 'submit' && 'Submit a Job Vacancy'}
-                {activeTab === 'manage' && 'Manage Job Vacancies'}
-              </h1>
-              <p className="muted">
-                {activeTab === 'profile' &&
-                  'Review and update your organization’s information so job postings stay accurate.'}
-                {activeTab === 'documents' &&
-                  'Upload official requirements to help PESDO validate and approve your job vacancies faster.'}
-                {activeTab === 'submit' &&
-                  'Provide job vacancy details for PESDO review before they appear to jobseekers.'}
-                {activeTab === 'manage' &&
-                  'Track the status of your submitted vacancies and review approved postings.'}
-              </p>
-            </div>
+            {activeTab === 'manage' && (
+              <div className="header-search">
+                <div className="header-search-input-wrapper">
+                  <input
+                    type="text"
+                    className="header-search-input"
+                    placeholder="Search jobs by title, location, description, nature, or salary..."
+                    value={jobSearchQuery}
+                    onChange={(e) => setJobSearchQuery(e.target.value)}
+                  />
+                  <span className="header-search-icon">🔍</span>
+                  {jobSearchQuery && (
+                    <button
+                      type="button"
+                      className="header-search-clear"
+                      onClick={() => setJobSearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {jobSearchQuery && (
+                  <div className="header-search-count">
+                    Found {
+                      jobStatusTab === 'pending' ? filteredPendingJobs.length :
+                      jobStatusTab === 'approved' ? filteredApprovedJobs.length :
+                      filteredRejectedJobs.length
+                    } job(s)
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="header-actions">
               <NotificationButton
                 notifications={employerNotifications}

@@ -17,6 +17,145 @@
   gap: 32px;
 }
 
+.manage-panel-stack {
+  margin-top: 16px;
+}
+
+/* Job Status Tabs */
+.job-status-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid rgba(148, 163, 184, 0.2);
+  padding-bottom: 0;
+}
+
+.job-status-tab {
+  position: relative;
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -2px;
+}
+
+.job-status-tab:hover {
+  color: #005177;
+  background: rgba(0, 81, 119, 0.05);
+}
+
+.job-status-tab.active {
+  color: #005177;
+  border-bottom-color: #005177;
+  background: rgba(0, 81, 119, 0.08);
+}
+
+.tab-count {
+  background: rgba(148, 163, 184, 0.2);
+  color: #475569;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  min-width: 20px;
+  text-align: center;
+}
+
+.job-status-tab.active .tab-count {
+  background: rgba(0, 81, 119, 0.2);
+  color: #005177;
+}
+
+.job-search-panel {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.job-search-container {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 50, 73, 0.08);
+  box-shadow: 0 10px 24px rgba(15, 50, 73, 0.08);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.job-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.job-search-input {
+  width: 100%;
+  padding: 12px 48px 12px 16px;
+  font-size: 0.95rem;
+  border: 1px solid rgba(15, 50, 73, 0.15);
+  border-radius: 10px;
+  background: #fff;
+  color: #0f3249;
+  transition: all 0.3s ease;
+}
+
+.job-search-input:focus {
+  border-color: #005177;
+  box-shadow: 0 0 0 3px rgba(0, 81, 119, 0.1);
+  outline: none;
+}
+
+.job-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.job-search-icon {
+  position: absolute;
+  right: 16px;
+  font-size: 1.1rem;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.job-search-clear {
+  position: absolute;
+  right: 44px;
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  color: #94a3b8;
+  cursor: pointer;
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.job-search-clear:hover {
+  background: #f1f5f9;
+  color: #0f3249;
+}
+
+.job-search-results-count {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
 .dashboard-panel {
   background: #fff;
   border-radius: 16px;
@@ -32,6 +171,19 @@
   margin: 0;
   font-size: 1.35rem;
   color: #0f172a;
+}
+
+.manage-panel-stack .dashboard-panel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  gap: 16px;
+}
+
+.manage-panel-stack .dashboard-panel h2 {
+  padding: 0 4px;
+  margin-bottom: 12px;
 }
 
 .section-subtitle {
@@ -777,13 +929,14 @@ input[type="date"]::-ms-expand {
   flex-direction: column;
   gap: 16px;
   margin-bottom: 28px;
+  background: transparent;
 }
 
 .header-top {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-start;
 }
 
@@ -792,10 +945,192 @@ input[type="date"]::-ms-expand {
   min-width: 240px;
 }
 
+.header-search {
+  flex: 1 1 360px;
+  min-width: 260px;
+  margin-right: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* When search is present, adjust layout */
+.header-top:has(.header-search) {
+  justify-content: space-between;
+}
+
+.header-search-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.header-search-input {
+  width: 100%;
+  padding: 12px 48px 12px 16px;
+  font-size: 0.95rem;
+  border: 1px solid rgba(15, 50, 73, 0.15);
+  border-radius: 999px;
+  background: #fff;
+  color: #0f3249;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 18px rgba(15, 50, 73, 0.08);
+}
+
+.header-search-input:focus {
+  border-color: #005177;
+  box-shadow: 0 0 0 3px rgba(0, 81, 119, 0.1);
+  outline: none;
+}
+
+.header-search-input::placeholder {
+  color: #94a3b8;
+}
+
+.header-search-icon {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1.05rem;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.header-search-clear {
+  position: absolute;
+  right: 46px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.header-search-clear:hover {
+  background: #f1f5f9;
+  color: #0f3249;
+}
+
+.header-search-count {
+  font-size: 0.85rem;
+  color: #64748b;
+  padding-left: 4px;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Icon-only notification button for Employer Dashboard */
+.employer-dashboard .header-actions .notification-button {
+  padding: 10px;
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  position: relative;
+  overflow: visible;
+  color: transparent;
+  font-size: 0;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #0b3a53 0%, #0f5a7a 100%);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 2px 10px rgba(6, 34, 51, 0.25);
+}
+
+/* Show only the bell icon using ::after */
+.employer-dashboard .header-actions .notification-button::after {
+  content: '🔔';
+  font-size: 1.2rem;
+  line-height: 1;
+  display: block;
+  color: white;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Fix notification badge positioning for icon-only button */
+.employer-dashboard .header-actions .notification-button .notification-badge {
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  font-size: 0.65rem;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+}
+
+/* Mobile Menu Toggle Button */
+.js-mobile-menu-toggle {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 1001;
+  background: linear-gradient(180deg, #0b3a53 0%, #0f5a7a 100%);
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  line-height: 1;
+}
+
+.js-mobile-menu-toggle:hover {
+  background: linear-gradient(180deg, #0f5a7a 0%, #0b3a53 100%);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.js-mobile-menu-toggle:active {
+  transform: scale(0.95);
+}
+
+/* Sidebar Overlay for Mobile */
+.js-sidebar-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.js-sidebar-overlay.open {
+  opacity: 1;
+  visibility: visible;
 }
 
 /* Responsive Styles for Employer Dashboard */
@@ -819,40 +1154,285 @@ input[type="date"]::-ms-expand {
 }
 
 @media (max-width: 768px) {
+  .js-mobile-menu-toggle {
+    display: flex !important;
+  }
+
+  /* Hide hamburger button when sidebar is open - use sidebar close button instead */
+  .js-mobile-menu-toggle.menu-open {
+    display: none !important;
+  }
+
+  .js-sidebar-overlay {
+    display: block;
+  }
+
+  /* Hide sidebar by default on mobile - MUST be hidden */
   .employer-dashboard .js-sidebar {
-    width: 100%;
-    height: auto;
-    position: relative;
-    flex-direction: row;
-    flex-wrap: wrap;
-    padding: 20px 16px;
-    gap: 16px;
+    width: 70%;
+    max-width: 260px;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: -100% !important;
+    transition: left 0.3s ease;
+    z-index: 1000 !important;
+    display: flex !important;
+    flex-direction: column;
+    padding: 8px 6px;
+    gap: 4px;
+    box-shadow: 4px 0 20px rgba(15, 50, 73, 0.5);
+    transform: translateX(0);
+    visibility: visible;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+    box-sizing: border-box;
+    pointer-events: auto !important;
+  }
+
+  /* Show sidebar only when .open class is present */
+  .employer-dashboard .js-sidebar.open {
+    left: 0 !important;
+  }
+
+  /* Ensure sidebar is never visible without .open class on mobile */
+  .employer-dashboard .js-sidebar:not(.open) {
+    left: -100% !important;
+    pointer-events: none;
   }
 
   .employer-dashboard .sidebar-header {
-    flex: 1 1 100%;
-    text-align: center;
+    flex: 0 0 auto;
+    text-align: left;
+    position: relative;
+    min-height: auto;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .manage-panel-stack {
+    margin-top: 8px;
+  }
+
+  /* Job Status Tabs Mobile */
+  .job-status-tabs {
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .job-status-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .job-status-tab {
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .tab-count {
+    font-size: 0.7rem;
+    padding: 2px 6px;
+  }
+
+  .header-top {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 0;
+    padding-top: 8px;
+  }
+
+  .header-search {
+    flex: 1 1 auto;
+    width: auto;
+    margin: 0;
+  }
+
+  .header-actions {
+    width: auto;
+    flex: 0 0 auto;
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+
+  /* Add close button inside sidebar on mobile only */
+  .employer-dashboard .js-sidebar .sidebar-close-btn {
+    display: flex !important;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+    z-index: 10;
+    padding: 0;
+    line-height: 1;
+    touch-action: manipulation;
+  }
+
+  .employer-dashboard .js-sidebar .sidebar-close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .employer-dashboard .js-sidebar .sidebar-close-btn:active {
+    transform: scale(0.95);
+  }
+
+  .employer-dashboard .brand-mark {
+    font-size: 11px;
+    padding: 4px 6px;
+    margin-right: 40px;
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: 0.05em;
   }
 
   .employer-dashboard .sidebar-nav {
-    flex: 1 1 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: visible !important;
+    min-height: 0;
+    flex-shrink: 1;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex-grow: 1;
+    max-height: none !important;
+    flex-basis: 0;
   }
 
   .employer-dashboard .nav-item {
-    flex: 1 1 calc(50% - 4px);
-    min-width: 140px;
+    width: 100%;
+    justify-content: flex-start;
+    padding: 5px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 32px;
+    max-height: 36px;
+    display: flex !important;
+    align-items: center;
+    gap: 5px;
+    border-radius: 5px;
+    font-weight: 500;
+    line-height: 1.1;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 1;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .employer-dashboard .nav-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    padding: 10px 12px;
-    font-size: 14px;
+  }
+
+  .employer-dashboard .user-snapshot {
+    gap: 2px;
+    overflow: visible;
+    visibility: visible !important;
+  }
+
+  .employer-dashboard .user-name {
+    font-size: 13px;
+    line-height: 1.2;
+    color: #ffffff !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .employer-dashboard .user-email {
+    font-size: 10px;
+    line-height: 1.2;
+    opacity: 0.85;
+    color: rgba(255, 255, 255, 0.8);
+    visibility: visible !important;
+  }
+
+  .employer-dashboard .sidebar-footer {
+    padding-top: 4px;
+    max-height: 50px;
+  }
+
+  .employer-dashboard .sidebar-footer .outline-btn {
+    padding: 5px 8px;
+    font-size: 11px;
+    min-height: 32px;
+    max-height: 36px;
   }
 
   .employer-dashboard .js-main {
-    margin-left: 0;
-    padding: 20px 16px 40px;
-    width: 100%;
+    margin-left: 0 !important;
+    padding: 16px 16px 40px; /* Reduced top padding since panel-stack will have margin */
+    height: auto;
+    min-height: 100vh;
+    overflow-y: visible;
+  }
+
+  .employer-dashboard .panel-stack {
+    margin-top: 0;
+  }
+
+  .employer-dashboard .main-header {
+    position: relative;
+    margin-bottom: 16px;
+    background: transparent;
+    padding: 64px 8px 0;
+    height: auto;
+    overflow: visible;
+  }
+
+  .employer-dashboard .header-top {
+    position: relative;
+    height: auto;
+    overflow: visible;
+  }
+
+  .employer-dashboard .header-actions {
+    position: static !important;
+    top: auto !important;
+    right: auto !important;
+    width: auto !important;
+    justify-content: flex-end !important;
+    z-index: auto !important;
+  }
+
+  .employer-dashboard .header-actions .notification-button {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    border-radius: 50% !important;
+    padding: 0 !important;
   }
 
   .dashboard-panel {
@@ -870,6 +1450,7 @@ input[type="date"]::-ms-expand {
   .company-logo-wrapper {
     width: 100px;
     height: 100px;
+    margin: 0 auto;
   }
 
   .company-display-name {
@@ -886,6 +1467,19 @@ input[type="date"]::-ms-expand {
 
   .section-title {
     font-size: 1rem;
+  }
+
+  .job-search-container {
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .job-search-input {
+    font-size: 0.9rem;
+  }
+
+  .job-search-results-count {
+    font-size: 0.8rem;
   }
 }
 

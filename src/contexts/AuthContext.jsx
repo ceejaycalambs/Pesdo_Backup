@@ -31,102 +31,104 @@ export function AuthProvider({ children }) {
   // Helper function to fetch user profile
   // Checks jobseeker first (most common), then employer, then admin
   // Returns: { success: boolean, profile: object|null, userType: string|null }
-  const fetchUserProfile = async (userId, email) => {
+  const fetchUserProfile = async (userId, email, options = {}) => {
     try {
-      console.log('📥 Fetching profile for:', email, 'User ID:', userId);
+      const { userTypeHint } = options;
+      console.log('📥 Fetching profile for:', email, 'User ID:', userId, userTypeHint ? `Hint: ${userTypeHint}` : '');
       
-      // Check jobseeker first (most common user type)
-      console.log('🔍 Querying jobseeker_profiles for ID:', userId);
+      // Get stored user type from localStorage as a hint
+      const storedUserType = localStorage.getItem(`userType_${userId}`);
+      const hint = userTypeHint || storedUserType;
       
-      // Try optimized query first (only essential columns to reduce RLS overhead)
-      const queryPromise = supabase
-        .from('jobseeker_profiles')
-        .select('id, email, first_name, last_name, suffix, phone, address, age, gender, civil_status, education, preferred_jobs, bio, profile_picture_url, resume_url, status, usertype, created_at, updated_at')
-        .eq('id', userId)
-        .maybeSingle();
+      // If we have a hint that user is not a jobseeker, skip jobseeker query
+      let jp = null;
+      let jpError = null;
       
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout after 15 seconds')), 15000)
-      );
-      
-      let jp, jpError;
-      try {
-        const result = await Promise.race([queryPromise, timeoutPromise]);
-        jp = result.data;
-        jpError = result.error;
-      } catch (err) {
-        if (err.message?.includes('timeout')) {
-          console.error('⏱️ Jobseeker query timed out after 15 seconds');
-          
-          // Retry with minimal columns only
-          console.log('🔄 Retrying with minimal columns...');
-          try {
-            const retryPromise = supabase
-              .from('jobseeker_profiles')
-              .select('id, email, first_name, last_name, usertype')
-              .eq('id', userId)
-              .maybeSingle();
+      if (hint && (hint === 'employer' || hint === 'admin' || hint === 'super_admin')) {
+        console.log(`⏭️ Skipping jobseeker query - user type hint: ${hint}`);
+      } else {
+        // Check jobseeker first (most common user type)
+        console.log('🔍 Querying jobseeker_profiles for ID:', userId);
+        
+        // Try optimized query first (only essential columns to reduce RLS overhead)
+        const queryPromise = supabase
+          .from('jobseeker_profiles')
+          .select('id, email, first_name, last_name, suffix, phone, address, age, gender, civil_status, education, preferred_jobs, bio, profile_picture_url, resume_url, status, usertype, created_at, updated_at')
+          .eq('id', userId)
+          .maybeSingle();
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Query timeout after 15 seconds')), 15000)
+        );
+        
+        try {
+          const result = await Promise.race([queryPromise, timeoutPromise]);
+          jp = result.data;
+          jpError = result.error;
+        } catch (err) {
+          if (err.message?.includes('timeout')) {
+            console.error('⏱️ Jobseeker query timed out after 15 seconds');
             
-            const retryTimeout = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Retry timeout')), 10000)
-            );
-            
-            const retryResult = await Promise.race([retryPromise, retryTimeout]);
-            if (retryResult.data) {
-              console.log('✅ Retry successful with minimal columns');
-              jp = retryResult.data;
-              jpError = null;
-            } else {
-              jpError = retryResult.error || new Error('Query timeout - please check your connection');
+            // Retry with minimal columns only
+            console.log('🔄 Retrying with minimal columns...');
+            try {
+              const retryPromise = supabase
+                .from('jobseeker_profiles')
+                .select('id, email, first_name, last_name, usertype')
+                .eq('id', userId)
+                .maybeSingle();
+              
+              const retryTimeout = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Retry timeout')), 10000)
+              );
+              
+              const retryResult = await Promise.race([retryPromise, retryTimeout]);
+              if (retryResult.data) {
+                console.log('✅ Retry successful with minimal columns');
+                jp = retryResult.data;
+                jpError = null;
+              } else {
+                jpError = retryResult.error || new Error('Query timeout - please check your connection');
+                jp = null;
+              }
+            } catch (retryErr) {
+              console.error('❌ Retry also failed:', retryErr);
+              jpError = new Error('Query timeout - please check your connection');
               jp = null;
             }
-          } catch (retryErr) {
-            console.error('❌ Retry also failed:', retryErr);
-            jpError = new Error('Query timeout - please check your connection');
+          } else {
+            console.error('❌ Unexpected error in jobseeker query:', err);
+            jpError = err;
             jp = null;
           }
-        } else {
-          console.error('❌ Unexpected error in jobseeker query:', err);
-          jpError = err;
-          jp = null;
         }
-      }
-      
-      console.log('📊 Jobseeker query result:', { 
-        hasData: !!jp, 
-        hasError: !!jpError, 
-        error: jpError?.message,
-        dataKeys: jp ? Object.keys(jp) : null
-      });
-      
-      if (jpError) {
-        console.error('❌ Error fetching jobseeker profile:', jpError);
-        console.error('Error details:', {
-          message: jpError.message,
-          code: jpError.code,
-          details: jpError.details,
-          hint: jpError.hint
+        
+        console.log('📊 Jobseeker query result:', { 
+          hasData: !!jp, 
+          hasError: !!jpError, 
+          error: jpError?.message,
+          dataKeys: jp ? Object.keys(jp) : null
         });
         
-        // If it's a timeout, try a simpler query or continue with fallback
-        if (jpError.message?.includes('timeout')) {
-          console.warn('⚠️ Query timed out - this may indicate an RLS or network issue');
-          // Continue to check other profile types, but also set a basic profile so app can continue
+        if (jpError && !jpError.message?.includes('timeout')) {
+          console.error('❌ Error fetching jobseeker profile:', jpError);
+        }
+        
+        if (jp) {
+          console.log('✅ Jobseeker profile loaded:', jp);
+          const profileData = { ...jp, userType: jp.usertype || 'jobseeker' };
+          setUserData(profileData);
+          setProfileLoaded(true);
+          // Store user type for future reference
+          localStorage.setItem(`userType_${userId}`, 'jobseeker');
+          console.log('✅ profileLoaded set to true');
+          return { success: true, profile: profileData, userType: 'jobseeker' };
         }
       }
       
-      if (jp) {
-        console.log('✅ Jobseeker profile loaded:', jp);
-        const profileData = { ...jp, userType: jp.usertype || 'jobseeker' };
-        setUserData(profileData);
-        setProfileLoaded(true);
-        console.log('✅ profileLoaded set to true');
-        return { success: true, profile: profileData, userType: 'jobseeker' };
-      }
-      
-      // If query timed out but we have a user ID, set basic profile to allow app to continue
-      if (jpError?.message?.includes('timeout')) {
-        console.warn('⚠️ Query timed out - setting basic profile to allow app to continue');
+      // If we know user is a jobseeker from hint but query failed, don't check other types
+      if (hint === 'jobseeker' && !jp) {
+        console.log('⚠️ Jobseeker hint exists but query failed - not checking other profile types');
         const fallbackProfile = {
           id: userId,
           email: email,
@@ -134,83 +136,80 @@ export function AuthProvider({ children }) {
         };
         setUserData(fallbackProfile);
         setProfileLoaded(true);
-        console.log('✅ Basic profile set (timeout fallback)');
+        console.log('✅ Basic jobseeker profile set (hint-based fallback)');
         return { success: true, profile: fallbackProfile, userType: 'jobseeker' };
       }
       
-      console.log('ℹ️ No jobseeker profile found, checking employer...');
+      // Only check employer if jobseeker query failed or was skipped (and we don't have a jobseeker hint)
+      // Also skip employer if we know user is an admin
+      if (!jp && hint !== 'admin' && hint !== 'super_admin') {
+        console.log('ℹ️ No jobseeker profile found, checking employer...');
 
-      // Check employer with timeout protection
-      console.log('🔍 Querying employer_profiles for ID:', userId);
-      const employerQueryPromise = supabase
-        .from('employer_profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-      
-      const employerTimeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout after 20 seconds')), 20000)
-      );
-      
-      let ep, epError;
-      try {
-        const result = await Promise.race([employerQueryPromise, employerTimeoutPromise]);
-        ep = result.data;
-        epError = result.error;
-      } catch (err) {
-        if (err.message?.includes('timeout')) {
-          console.error('⏱️ Employer query timed out after 20 seconds');
-          epError = new Error('Query timeout - please check your connection');
-          ep = null;
-        } else {
-          console.error('❌ Unexpected error in employer query:', err);
-          epError = err;
-          ep = null;
+        // Check employer with timeout protection
+        console.log('🔍 Querying employer_profiles for ID:', userId);
+        const employerQueryPromise = supabase
+          .from('employer_profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+        
+        const employerTimeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Query timeout after 20 seconds')), 20000)
+        );
+        
+        let ep, epError;
+        try {
+          const result = await Promise.race([employerQueryPromise, employerTimeoutPromise]);
+          ep = result.data;
+          epError = result.error;
+        } catch (err) {
+          if (err.message?.includes('timeout')) {
+            console.error('⏱️ Employer query timed out after 20 seconds');
+            epError = new Error('Query timeout - please check your connection');
+            ep = null;
+          } else {
+            console.error('❌ Unexpected error in employer query:', err);
+            epError = err;
+            ep = null;
+          }
         }
-      }
-      
-      console.log('📊 Employer query result:', { 
-        hasData: !!ep, 
-        hasError: !!epError, 
-        error: epError?.message,
-        dataKeys: ep ? Object.keys(ep) : null
-      });
-      
-      if (epError) {
-        console.error('❌ Error fetching employer profile:', epError);
-        console.error('Error details:', {
-          message: epError.message,
-          code: epError.code,
-          details: epError.details,
-          hint: epError.hint
+        
+        console.log('📊 Employer query result:', { 
+          hasData: !!ep, 
+          hasError: !!epError, 
+          error: epError?.message,
+          dataKeys: ep ? Object.keys(ep) : null
         });
         
-        if (epError.message?.includes('timeout')) {
-          console.warn('⚠️ Employer query timed out - this may indicate an RLS or network issue');
+        if (epError && !epError.message?.includes('timeout')) {
+          console.error('❌ Error fetching employer profile:', epError);
         }
-      }
-      
-      if (ep) {
-        console.log('✅ Employer profile loaded:', ep);
-        const profileData = { ...ep, userType: ep.usertype || 'employer' };
-        setUserData(profileData);
-        setProfileLoaded(true);
-        console.log('✅ profileLoaded set to true');
-        return { success: true, profile: profileData, userType: 'employer' };
-      }
-      
-      // If employer query timed out but we have a user ID, set basic profile to allow app to continue
-      if (epError?.message?.includes('timeout')) {
-        console.warn('⚠️ Employer query timed out - setting basic profile to allow app to continue');
-        const fallbackProfile = {
-          id: userId,
-          email: email,
-          userType: 'employer'
-        };
-        setUserData(fallbackProfile);
-        setProfileLoaded(true);
-        console.log('✅ Basic employer profile set (timeout fallback)');
-        return { success: true, profile: fallbackProfile, userType: 'employer' };
+        
+        if (ep) {
+          console.log('✅ Employer profile loaded:', ep);
+          const profileData = { ...ep, userType: ep.usertype || 'employer' };
+          setUserData(profileData);
+          setProfileLoaded(true);
+          // Store user type for future reference
+          localStorage.setItem(`userType_${userId}`, 'employer');
+          console.log('✅ profileLoaded set to true');
+          return { success: true, profile: profileData, userType: 'employer' };
+        }
+        
+        // If employer query timed out but we have a user ID, set basic profile to allow app to continue
+        if (epError?.message?.includes('timeout')) {
+          console.warn('⚠️ Employer query timed out - setting basic profile to allow app to continue');
+          const fallbackProfile = {
+            id: userId,
+            email: email,
+            userType: 'employer'
+          };
+          setUserData(fallbackProfile);
+          setProfileLoaded(true);
+          localStorage.setItem(`userType_${userId}`, 'employer');
+          console.log('✅ Basic employer profile set (timeout fallback)');
+          return { success: true, profile: fallbackProfile, userType: 'employer' };
+        }
       }
       
       // Check admin by id with timeout protection
@@ -324,6 +323,9 @@ export function AuthProvider({ children }) {
         };
         setUserData(profileData);
         setProfileLoaded(true);
+        // Store user type for future reference
+        const userTypeForStorage = role === 'super_admin' ? 'super_admin' : 'admin';
+        localStorage.setItem(`userType_${userId}`, userTypeForStorage);
         console.log('✅ profileLoaded set to true');
         // Return the correct userType based on role
         const userTypeForLog = role === 'super_admin' ? 'super_admin' : 'admin';
@@ -1160,7 +1162,10 @@ export function AuthProvider({ children }) {
           console.log('✅ Found existing session on mount, fetching profile:', session.user.email);
           setCurrentUser(session.user);
           setProfileLoaded(false); // Reset to ensure fresh fetch
-          const profileResult = await fetchUserProfile(session.user.id, session.user.email);
+          // Get stored user type hint to skip unnecessary queries
+          const storedUserType = localStorage.getItem(`userType_${session.user.id}`);
+          const userTypeHint = storedUserType || undefined;
+          const profileResult = await fetchUserProfile(session.user.id, session.user.email, { userTypeHint });
           console.log('📊 checkExistingSession - Profile fetch completed:', profileResult?.success ? 'Success' : 'Failed');
           if (isMounted) {
             hasInitializedRef.current = true;
@@ -1251,7 +1256,10 @@ export function AuthProvider({ children }) {
             console.log('✅ Session found, fetching profile for:', session.user.email);
             setCurrentUser(session.user);
             setProfileLoaded(false); // Reset to ensure fresh fetch
-            const profileResult = await fetchUserProfile(session.user.id, session.user.email);
+            // Get stored user type hint to skip unnecessary queries
+            const storedUserType = localStorage.getItem(`userType_${session.user.id}`);
+            const userTypeHint = storedUserType || undefined;
+            const profileResult = await fetchUserProfile(session.user.id, session.user.email, { userTypeHint });
             console.log('📊 INITIAL_SESSION - Profile fetch completed:', profileResult?.success ? 'Success' : 'Failed');
             hasInitializedRef.current = true;
             isProcessingRef.current = false;
@@ -1267,18 +1275,29 @@ export function AuthProvider({ children }) {
         }
         
         // Handle SIGNED_IN events (explicit login)
-        // Skip if profile is already loaded for this user
+        // Skip if profile is already loaded for this user and we're not in the middle of initialization
         if (session?.user && hasInitializedRef.current && currentUser?.id === session.user.id && profileLoaded) {
           console.log('ℹ️ Profile already loaded for SIGNED_IN, skipping fetch');
           isProcessingRef.current = false;
           return;
         }
         
+        // Skip if we're already processing this user's profile
+        if (session?.user && isProcessingRef.current && currentUser?.id === session.user.id) {
+          console.log('ℹ️ Already processing profile for this user, skipping duplicate SIGNED_IN');
+          return;
+        }
+        
         setCurrentUser(session?.user || null);
         
         if (session?.user) {
-          console.log('🔄 SIGNED_IN - Fetching profile for:', session.user.email);
-          const profileResult = await fetchUserProfile(session.user.id, session.user.email);
+          // Get stored user type hint to skip unnecessary queries
+          const storedUserType = localStorage.getItem(`userType_${session.user.id}`);
+          const userTypeHint = storedUserType || undefined;
+          
+          console.log('🔄 SIGNED_IN - Fetching profile for:', session.user.email, userTypeHint ? `(hint: ${userTypeHint})` : '');
+          isProcessingRef.current = true;
+          const profileResult = await fetchUserProfile(session.user.id, session.user.email, { userTypeHint });
           console.log('📊 SIGNED_IN - Profile fetch completed:', profileResult?.success ? 'Success' : 'Failed');
           hasInitializedRef.current = true;
           isProcessingRef.current = false;
