@@ -38,15 +38,15 @@ export function AuthProvider({ children }) {
       // Check jobseeker first (most common user type)
       console.log('🔍 Querying jobseeker_profiles for ID:', userId);
       
-      // Query with timeout protection
+      // Try optimized query first (only essential columns to reduce RLS overhead)
       const queryPromise = supabase
         .from('jobseeker_profiles')
-        .select('*')
+        .select('id, email, first_name, last_name, suffix, phone, address, age, gender, civil_status, education, preferred_jobs, bio, profile_picture_url, resume_url, status, usertype, created_at, updated_at')
         .eq('id', userId)
         .maybeSingle();
       
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Query timeout after 20 seconds')), 20000)
+        setTimeout(() => reject(new Error('Query timeout after 15 seconds')), 15000)
       );
       
       let jp, jpError;
@@ -56,9 +56,35 @@ export function AuthProvider({ children }) {
         jpError = result.error;
       } catch (err) {
         if (err.message?.includes('timeout')) {
-          console.error('⏱️ Jobseeker query timed out after 20 seconds');
-          jpError = new Error('Query timeout - please check your connection');
-          jp = null;
+          console.error('⏱️ Jobseeker query timed out after 15 seconds');
+          
+          // Retry with minimal columns only
+          console.log('🔄 Retrying with minimal columns...');
+          try {
+            const retryPromise = supabase
+              .from('jobseeker_profiles')
+              .select('id, email, first_name, last_name, usertype')
+              .eq('id', userId)
+              .maybeSingle();
+            
+            const retryTimeout = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Retry timeout')), 10000)
+            );
+            
+            const retryResult = await Promise.race([retryPromise, retryTimeout]);
+            if (retryResult.data) {
+              console.log('✅ Retry successful with minimal columns');
+              jp = retryResult.data;
+              jpError = null;
+            } else {
+              jpError = retryResult.error || new Error('Query timeout - please check your connection');
+              jp = null;
+            }
+          } catch (retryErr) {
+            console.error('❌ Retry also failed:', retryErr);
+            jpError = new Error('Query timeout - please check your connection');
+            jp = null;
+          }
         } else {
           console.error('❌ Unexpected error in jobseeker query:', err);
           jpError = err;

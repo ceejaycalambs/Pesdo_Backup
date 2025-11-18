@@ -23,10 +23,16 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
   z-index: 100;
+  transition: left 0.3s ease;
 }
 
 .js-sidebar::-webkit-scrollbar {
   display: none;
+}
+
+/* Hide close button on desktop */
+.js-sidebar .sidebar-close-btn {
+  display: none !important;
 }
 
 .sidebar-header {
@@ -55,6 +61,7 @@
 .user-name {
   font-size: 16px;
   font-weight: 600;
+  color: #ffffff;
 }
 
 .user-email {
@@ -1273,23 +1280,33 @@
 .js-mobile-menu-toggle {
   display: none;
   position: fixed;
-  top: 16px;
-  left: 16px;
+  top: 12px;
+  left: 12px;
   z-index: 1001;
   background: linear-gradient(180deg, #0b3a53 0%, #0f5a7a 100%);
   color: #fff;
   border: 2px solid rgba(255, 255, 255, 0.3);
-  padding: 10px 14px;
-  border-radius: 8px;
+  padding: 0;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 20px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  font-size: 18px;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   transition: all 0.3s ease;
+  line-height: 1;
 }
 
 .js-mobile-menu-toggle:hover {
   background: linear-gradient(180deg, #0f5a7a 0%, #0b3a53 100%);
   border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.js-mobile-menu-toggle:active {
+  transform: scale(0.95);
 }
 
 /* Sidebar Overlay for Mobile */
@@ -1312,50 +1329,233 @@
   visibility: visible;
 }
 
+/* Ensure sidebar is above overlay - z-index set in mobile media query */
+
 @media (max-width: 768px) {
   .js-mobile-menu-toggle {
-    display: block;
+    display: flex !important;
+  }
+
+  /* Hide hamburger button when sidebar is open - use sidebar close button instead */
+  .js-mobile-menu-toggle.menu-open {
+    display: none !important;
   }
 
   .js-sidebar-overlay {
     display: block;
   }
 
+  /* Hide sidebar by default on mobile - MUST be hidden */
   .js-sidebar {
-    width: 280px;
+    width: 70%;
+    max-width: 260px;
     height: 100vh;
     position: fixed;
     top: 0;
-    left: -100%;
+    left: -100% !important;
     transition: left 0.3s ease;
-    z-index: 1000;
+    z-index: 1000 !important;
+    display: flex !important;
     flex-direction: column;
-    padding: 32px 24px;
-    gap: 24px;
+    padding: 8px 6px;
+    gap: 4px;
     box-shadow: 4px 0 20px rgba(15, 50, 73, 0.5);
+    transform: translateX(0);
+    visibility: visible;
+    /* Allow content to be visible - flex layout will fit everything */
+    overflow: visible !important;
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+    /* Ensure content fits */
+    box-sizing: border-box;
+    /* Ensure sidebar content is clickable */
+    pointer-events: auto !important;
   }
 
+  /* Show sidebar only when .open class is present */
   .js-sidebar.open {
-    left: 0;
+    left: 0 !important;
+  }
+
+  /* Ensure sidebar is never visible without .open class on mobile */
+  .js-sidebar:not(.open) {
+    left: -100% !important;
+    pointer-events: none;
   }
 
   .sidebar-header {
     flex: 0 0 auto;
     text-align: left;
+    position: relative;
+    min-height: auto;
+    padding-bottom: 4px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  /* Add close button inside sidebar on mobile only */
+  .js-sidebar .sidebar-close-btn {
+    display: flex !important;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+    z-index: 10;
+    padding: 0;
+    line-height: 1;
+    touch-action: manipulation;
+  }
+
+  .js-sidebar .sidebar-close-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .js-sidebar .sidebar-close-btn:active {
+    transform: scale(0.95);
+  }
+
+  .brand-mark {
+    font-size: 11px;
+    padding: 4px 6px;
+    margin-right: 40px; /* Space for close button */
+    line-height: 1.1;
+    font-weight: 700;
+    letter-spacing: 0.05em;
   }
 
   .sidebar-nav {
-    flex: 1;
+    flex: 1 1 auto;
+    display: flex;
     flex-direction: column;
-    gap: 8px;
-    overflow-y: auto;
+    gap: 3px;
+    overflow: visible !important;
+    min-height: 0;
+    flex-shrink: 1;
+    align-items: stretch;
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+    /* Ensure all nav items are visible */
+    justify-content: flex-start;
+    /* Make sure nav section takes available space and shows all items */
+    flex-grow: 1;
+    max-height: none !important;
+    /* Ensure nav section can shrink if needed */
+    flex-basis: 0;
+  }
+
+  .sidebar-nav::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* Hide scrollbar on mobile - no scrolling needed */
+  .js-sidebar::-webkit-scrollbar {
+    display: none !important;
   }
 
   .nav-item {
     width: 100%;
     justify-content: flex-start;
-    padding: 12px 14px;
-    font-size: 15px;
+    padding: 5px 6px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-height: 32px;
+    max-height: 36px;
+    display: flex !important;
+    align-items: center;
+    gap: 5px;
+    border-radius: 5px;
+    font-weight: 500;
+    line-height: 1.1;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 1;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .nav-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .user-snapshot {
+    margin-top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: visible;
+    visibility: visible !important;
+  }
+
+  .user-name {
+    font-size: 13px;
+    line-height: 1.2;
+    font-weight: 600;
+    color: #ffffff !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  .user-email {
+    font-size: 10px;
+    line-height: 1.2;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    opacity: 0.85;
+    color: rgba(255, 255, 255, 0.8);
+    visibility: visible !important;
+  }
+
+
+  .sidebar-footer {
+    flex: 0 0 auto;
+    margin-top: auto;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    width: 100%;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 10;
+    max-height: 50px;
+  }
+
+  .sidebar-footer .outline-btn {
+    width: 100%;
+    padding: 5px 8px;
+    font-size: 11px;
+    min-height: 32px;
+    max-height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    line-height: 1.1;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    position: relative;
+    z-index: 11;
   }
 
   .js-main {
@@ -1377,6 +1577,221 @@
     padding-bottom: 16px;
   }
 
+  .header-top {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .header-info {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .header-info h1 {
+    font-size: 1.4rem;
+    margin-bottom: 8px;
+    word-wrap: break-word;
+  }
+
+  .header-info .muted {
+    font-size: 0.9rem;
+    word-wrap: break-word;
+  }
+
+  .header-actions {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 8px;
+  }
+
+  .header-actions .notification-container {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .header-actions .notification-button {
+    width: 100%;
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    justify-content: center;
+  }
+
+  .header-controls {
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .header-controls input,
+  .header-controls select {
+    width: 100%;
+    font-size: 14px;
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  /* Convert job table to cards on mobile */
+  .job-table-wrapper {
+    width: 100%;
+    overflow: visible;
+  }
+
+  .job-table-scroll {
+    overflow: visible;
+  }
+
+  .job-table {
+    min-width: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .job-table-header {
+    display: none; /* Hide table header on mobile */
+  }
+
+  .job-table-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .job-table-row {
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid rgba(15, 50, 73, 0.1);
+    border-radius: 12px;
+    padding: 16px;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(15, 50, 73, 0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .job-table-row:active {
+    transform: scale(0.98);
+  }
+
+  .job-table-cell {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+  }
+
+  /* Mobile card layout for job cells */
+  .job-table-cell.job-id {
+    order: 1;
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .job-table-cell.job-logo {
+    order: 2;
+    width: 50px;
+    height: 50px;
+    flex-shrink: 0;
+  }
+
+  .job-table-cell.job-logo img,
+  .job-table-cell.job-logo .logo-placeholder {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+  }
+
+  .job-table-cell.job-employer {
+    order: 3;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .job-employer-name {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+
+  .job-employer-acronym {
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .job-table-cell.job-position {
+    order: 4;
+    font-size: 15px;
+    font-weight: 600;
+    color: #0f172a;
+    margin-top: 4px;
+  }
+
+  .job-table-cell.job-assignment {
+    order: 5;
+    font-size: 13px;
+    color: #64748b;
+    flex-wrap: wrap;
+  }
+
+  .job-table-cell.job-match {
+    order: 6;
+    font-size: 13px;
+    font-weight: 600;
+    color: #0369a1;
+  }
+
+  .job-table-cell.job-vacancies {
+    order: 7;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .job-table-cell.job-salary {
+    order: 8;
+    font-size: 14px;
+    font-weight: 600;
+    color: #14532d;
+  }
+
+  .job-table-cell.job-status {
+    order: 9;
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .job-table-cell.job-action {
+    order: 10;
+    width: 100%;
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(15, 50, 73, 0.08);
+  }
+
+  .job-action .view-button {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Hide less important info on mobile, show in compact format */
+  .job-table-cell.job-match::before {
+    content: 'Match: ';
+    font-weight: 400;
+    color: #64748b;
+  }
+
+  .job-table-cell.job-vacancies::before {
+    content: 'Vacancies: ';
+    font-weight: 400;
+    color: #64748b;
+  }
+
   .cards-grid {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -1391,17 +1806,6 @@
   .profile-avatar-actions {
     grid-template-columns: 1fr;
     gap: 12px;
-  }
-
-  .header-controls {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .header-controls input,
-  .header-controls select {
-    width: 100%;
-    min-width: unset;
   }
 }
 
@@ -1418,6 +1822,7 @@
 
   .user-name {
     font-size: 14px;
+    color: #ffffff !important;
   }
 
   .user-email {
@@ -1447,6 +1852,36 @@
     min-width: unset;
     font-size: 14px;
     padding: 10px 12px;
+  }
+
+  /* Further optimize job cards for small mobile */
+  .job-table-row {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .job-table-cell.job-logo {
+    width: 45px;
+    height: 45px;
+  }
+
+  .job-table-cell.job-logo img,
+  .job-table-cell.job-logo .logo-placeholder {
+    width: 45px;
+    height: 45px;
+  }
+
+  .job-employer-name {
+    font-size: 15px;
+  }
+
+  .job-table-cell.job-position {
+    font-size: 14px;
+  }
+
+  .job-action .view-button {
+    padding: 10px;
+    font-size: 13px;
   }
 
   .job-actions {
@@ -1501,6 +1936,40 @@
 }
 
 @media (max-width: 480px) {
+  /* Extra small mobile - further compact job cards */
+  .job-table-row {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .job-table-cell.job-logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .job-table-cell.job-logo img,
+  .job-table-cell.job-logo .logo-placeholder {
+    width: 40px;
+    height: 40px;
+    font-size: 12px;
+  }
+
+  .job-employer-name {
+    font-size: 14px;
+  }
+
+  .job-table-cell.job-position {
+    font-size: 13px;
+  }
+
+  .job-table-cell.job-assignment {
+    font-size: 12px;
+  }
+
+  .job-action .view-button {
+    padding: 10px;
+    font-size: 12px;
+  }
   .js-sidebar {
     padding: 12px 10px;
   }

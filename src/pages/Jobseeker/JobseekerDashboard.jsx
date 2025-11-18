@@ -157,15 +157,51 @@ const JobseekerDashboard = () => {
     };
   }, []);
 
-  // Close mobile menu when clicking overlay
+  // Close mobile menu when clicking overlay or pressing Escape
   useEffect(() => {
     const handleOverlayClick = (e) => {
-      if (e.target.classList.contains('js-sidebar-overlay')) {
+      if (e.target && e.target.classList.contains('js-sidebar-overlay')) {
+        console.log('Overlay clicked, closing menu');
         setMobileMenuOpen(false);
       }
     };
-    document.addEventListener('click', handleOverlayClick);
-    return () => document.removeEventListener('click', handleOverlayClick);
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && mobileMenuOpen) {
+        console.log('Escape pressed, closing menu');
+        setMobileMenuOpen(false);
+      }
+    };
+    
+    // Use capture phase to ensure overlay click is handled
+    document.addEventListener('click', handleOverlayClick, true);
+    document.addEventListener('keydown', handleEscape);
+    
+    return () => {
+      document.removeEventListener('click', handleOverlayClick, true);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [mobileMenuOpen]);
+
+  // Ensure sidebar is closed on mobile by default
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        setMobileMenuOpen(false);
+      }
+    };
+    
+    // Check on mount
+    checkMobile();
+    
+    // Check on resize
+    const handleResize = () => {
+      checkMobile();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
   
   // Wait for profile to load before proceeding
@@ -2059,11 +2095,29 @@ const JobseekerDashboard = () => {
   return (
     <div className="js-dashboard">
       <button 
-        className="js-mobile-menu-toggle"
-        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        type="button"
+        className={`js-mobile-menu-toggle ${mobileMenuOpen ? 'menu-open' : ''}`}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('🍔 Hamburger clicked, current state:', mobileMenuOpen);
+          const newState = !mobileMenuOpen;
+          console.log('🍔 Setting new state to:', newState);
+          setMobileMenuOpen(newState);
+        }}
+        onTouchEnd={(e) => {
+          // Handle touch events for mobile - only toggle on touch end
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('👆 Touch end on hamburger, toggling');
+          setMobileMenuOpen(prev => !prev);
+        }}
         aria-label="Toggle menu"
+        style={{ zIndex: 1001, touchAction: 'manipulation' }}
       >
-        {mobileMenuOpen ? '✕' : '☰'}
+        <span style={{ fontSize: '20px', lineHeight: '1', display: 'block', pointerEvents: 'none', userSelect: 'none' }}>
+          ☰
+        </span>
       </button>
       <div 
         className={`js-sidebar-overlay ${mobileMenuOpen ? 'open' : ''}`}
@@ -2071,6 +2125,20 @@ const JobseekerDashboard = () => {
       />
       <aside className={`js-sidebar ${mobileMenuOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
+          <button
+            type="button"
+            className="sidebar-close-btn"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log('❌ Close button clicked');
+              setMobileMenuOpen(false);
+            }}
+            aria-label="Close menu"
+            style={{ display: 'none' }} /* Hidden by default, shown on mobile via CSS */
+          >
+            ✕
+          </button>
           <div className="brand-mark">Jobseeker Dashboard</div>
           {profileDisplayName || profileDisplayEmail ? (
             <div className="user-snapshot">
@@ -2102,7 +2170,14 @@ const JobseekerDashboard = () => {
         </nav>
 
         <div className="sidebar-footer">
-          <button type="button" className="outline-btn full" onClick={() => logout()}>
+          <button 
+            type="button" 
+            className="outline-btn full" 
+            onClick={() => {
+              setMobileMenuOpen(false);
+              logout();
+            }}
+          >
             Logout
           </button>
       </div>

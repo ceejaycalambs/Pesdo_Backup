@@ -3,7 +3,18 @@ import './NotificationButton.css';
 
 const NotificationButton = ({ notifications, unreadCount, onMarkAsRead, onMarkAllAsRead, onNotificationClick }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const dropdownRef = useRef(null);
+
+  // Detect mobile view and handle resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -39,7 +50,7 @@ const NotificationButton = ({ notifications, unreadCount, onMarkAsRead, onMarkAl
   };
 
   return (
-    <div className="notification-container" ref={dropdownRef}>
+    <div className={`notification-container ${isMobile ? 'mobile' : ''}`} ref={dropdownRef}>
       <button
         className="notification-button"
         onClick={() => setIsOpen(!isOpen)}
