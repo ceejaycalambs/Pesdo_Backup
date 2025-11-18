@@ -14,6 +14,7 @@ const LandingPage = () => {
     const { currentUser, userData, profileLoaded } = auth || {};
     const [headerScrolled, setHeaderScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [loginDropdownOpen, setLoginDropdownOpen] = useState(false);
     const [stats, setStats] = useState({
         jobseekers: 0,
         employers: 0,
@@ -110,6 +111,10 @@ const LandingPage = () => {
             if (mobileMenuOpen && !event.target.closest('.header') && !event.target.closest('.mobile-nav')) {
                 setMobileMenuOpen(false);
             }
+            // Close login dropdown when clicking outside
+            if (loginDropdownOpen && !event.target.closest('.login-dropdown')) {
+                setLoginDropdownOpen(false);
+            }
         };
 
         if (mobileMenuOpen) {
@@ -120,11 +125,16 @@ const LandingPage = () => {
             document.body.style.overflow = '';
         }
 
+        // Also listen for clicks when login dropdown is open
+        if (loginDropdownOpen) {
+            document.addEventListener('click', handleClickOutside);
+        }
+
         return () => {
             document.removeEventListener('click', handleClickOutside);
             document.body.style.overflow = '';
         };
-    }, [mobileMenuOpen]);
+    }, [mobileMenuOpen, loginDropdownOpen]);
 
     // Fetch stats - MUST be before any early returns
     useEffect(() => {
@@ -411,7 +421,12 @@ const LandingPage = () => {
                 </div>
                 <button 
                     className="mobile-menu-toggle" 
-                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                    onClick={() => {
+                        setMobileMenuOpen(!mobileMenuOpen);
+                        if (mobileMenuOpen) {
+                            setLoginDropdownOpen(false);
+                        }
+                    }}
                     aria-label="Toggle mobile menu"
                     aria-expanded={mobileMenuOpen}
                 >
@@ -420,16 +435,31 @@ const LandingPage = () => {
                 <nav aria-label="Primary navigation">
                     <Link className="btn" to="/register">Register</Link>
                     <div className="login-dropdown">
-                        <button className="btn btn-outline login-dropdown-btn">Login</button>
-                        <div className="login-dropdown-content">
-                            <Link to="/login/jobseeker" className="login-option" onClick={() => setMobileMenuOpen(false)}>
+                        <button 
+                            className="btn btn-outline login-dropdown-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setLoginDropdownOpen(!loginDropdownOpen);
+                            }}
+                            aria-expanded={loginDropdownOpen}
+                        >
+                            Login
+                        </button>
+                        <div className={`login-dropdown-content ${loginDropdownOpen ? 'open' : ''}`}>
+                            <Link to="/login/jobseeker" className="login-option" onClick={() => {
+                                setMobileMenuOpen(false);
+                                setLoginDropdownOpen(false);
+                            }}>
                                 <span className="login-icon">👤</span>
                                 <span className="login-text">
                                     <strong>Jobseeker Login</strong>
                                     <small>Find your dream job</small>
                                 </span>
                             </Link>
-                            <Link to="/login/employer" className="login-option" onClick={() => setMobileMenuOpen(false)}>
+                            <Link to="/login/employer" className="login-option" onClick={() => {
+                                setMobileMenuOpen(false);
+                                setLoginDropdownOpen(false);
+                            }}>
                                 <span className="login-icon">🏢</span>
                                 <span className="login-text">
                                     <strong>Employer Login</strong>
@@ -446,16 +476,31 @@ const LandingPage = () => {
             <div className={`mobile-nav ${mobileMenuOpen ? 'open' : ''}`}>
                 <Link className="btn" to="/register" onClick={() => setMobileMenuOpen(false)}>Register</Link>
                 <div className="login-dropdown">
-                    <button className="btn btn-outline login-dropdown-btn">Login</button>
-                    <div className="login-dropdown-content">
-                        <Link to="/login/jobseeker" className="login-option" onClick={() => setMobileMenuOpen(false)}>
+                    <button 
+                        className="btn btn-outline login-dropdown-btn"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setLoginDropdownOpen(!loginDropdownOpen);
+                        }}
+                        aria-expanded={loginDropdownOpen}
+                    >
+                        Login
+                    </button>
+                    <div className={`login-dropdown-content ${loginDropdownOpen ? 'open' : ''}`}>
+                        <Link to="/login/jobseeker" className="login-option" onClick={() => {
+                            setMobileMenuOpen(false);
+                            setLoginDropdownOpen(false);
+                        }}>
                             <span className="login-icon">👤</span>
                             <span className="login-text">
                                 <strong>Jobseeker Login</strong>
                                 <small>Find your dream job</small>
                             </span>
                         </Link>
-                        <Link to="/login/employer" className="login-option" onClick={() => setMobileMenuOpen(false)}>
+                        <Link to="/login/employer" className="login-option" onClick={() => {
+                            setMobileMenuOpen(false);
+                            setLoginDropdownOpen(false);
+                        }}>
                             <span className="login-icon">🏢</span>
                             <span className="login-text">
                                 <strong>Employer Login</strong>

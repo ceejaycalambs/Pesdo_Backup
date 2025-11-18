@@ -842,7 +842,8 @@ nav a {
     transition: transform 0.3s ease;
 }
 
-.login-dropdown:hover .login-dropdown-btn::after {
+.login-dropdown:hover .login-dropdown-btn::after,
+.login-dropdown-btn[aria-expanded="true"]::after {
     transform: rotate(180deg);
 }
 
@@ -875,7 +876,8 @@ nav a {
 }
 
 .login-dropdown:hover .login-dropdown-content,
-.login-dropdown-content:hover {
+.login-dropdown-content:hover,
+.login-dropdown-content.open {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -1004,12 +1006,24 @@ nav a {
 
 .mobile-nav .login-dropdown-content {
     position: static;
+    opacity: 0;
+    visibility: hidden;
+    max-height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    min-width: 100%;
+    margin-top: 0;
+    box-shadow: none;
+    border: none;
+    transition: opacity 0.3s ease, visibility 0.3s ease, max-height 0.3s ease, margin-top 0.3s ease;
+}
+
+.mobile-nav .login-dropdown-content.open {
     opacity: 1;
     visibility: visible;
+    max-height: 500px;
     pointer-events: auto;
-    min-width: 100%;
     margin-top: 10px;
-    box-shadow: none;
     border: 1px solid rgba(255, 255, 255, 0.2);
 }
 

@@ -441,6 +441,7 @@
   padding: 20px 15px;
   border-bottom: 1px solid #e9ecef;
   vertical-align: middle;
+  color: #1f2937;
 }
 
 .users-table tbody tr:hover {
@@ -452,6 +453,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  color: #1f2937;
 }
 
 .user-avatar {
@@ -478,7 +480,7 @@
 
 .user-name {
   font-weight: 600;
-  color: #333;
+  color: #1f2937 !important;
 }
 
 /* Action Buttons */
