@@ -372,8 +372,7 @@ const LandingPage = () => {
                 console.log('RPC function not available, using direct query');
                 const { data, error } = await supabase
                     .from('employer_profiles')
-                    .select('id, business_name, company_logo_url, logo_url, company_logo, acronym')
-                    .eq('verification_status', 'approved');
+                    .select('id, business_name, company_logo_url, acronym');
                 
                 if (error) {
                     console.error('Error fetching employers:', error);
@@ -596,54 +595,43 @@ const LandingPage = () => {
                             <div className="employers-loading">Loading employers...</div>
                         ) : employers.length > 0 ? (
                             <div className="employers-grid">
-                                {employers.map((employer, index) => {
-                                    // Create varied sizes for masonry effect
-                                    // Pattern: small (1x1), medium (2x1), large (2x2), etc.
-                                    const sizePattern = index % 7;
-                                    let sizeClass = 'logo-small';
-                                    if (sizePattern === 1 || sizePattern === 3) {
-                                        sizeClass = 'logo-medium';
-                                    } else if (sizePattern === 2 || sizePattern === 5) {
-                                        sizeClass = 'logo-large';
-                                    } else if (sizePattern === 4) {
-                                        sizeClass = 'logo-wide';
-                                    }
-                                    
-                                    // Get logo URL from various possible field names
-                                    const logoUrl = employer.company_logo_url || employer.logo_url || employer.company_logo || null;
-                                    const hasLogo = logoUrl && logoUrl.trim() !== '';
-                                    
-                                    return (
-                                        <div key={employer.id} className={`employer-logo-card ${sizeClass}`}>
-                                            {hasLogo ? (
-                                                <img 
-                                                    src={logoUrl} 
-                                                    alt={employer.business_name || employer.acronym || 'Company Logo'}
-                                                    className="employer-logo"
-                                                    onError={(e) => {
-                                                        // Hide image and show placeholder on error
-                                                        e.target.style.display = 'none';
-                                                        const placeholder = e.target.nextElementSibling;
-                                                        if (placeholder) {
-                                                            placeholder.style.display = 'flex';
-                                                        }
-                                                    }}
-                                                    onLoad={(e) => {
-                                                        // Ensure placeholder is hidden when image loads successfully
-                                                        const placeholder = e.target.nextElementSibling;
-                                                        if (placeholder) {
-                                                            placeholder.style.display = 'none';
-                                                        }
-                                                    }}
-                                                />
-                                            ) : (
-                                                <div className="employer-logo-placeholder">
-                                                    {employer.acronym || (employer.business_name ? employer.business_name.substring(0, 2).toUpperCase() : 'CO')}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                                {employers.length > 0 ? (
+                                    employers.slice(0, 20).map((employer) => {
+                                        const logoUrl = employer.company_logo_url || null;
+                                        const hasLogo = logoUrl && logoUrl.trim() !== '';
+
+                                        return (
+                                            <div key={employer.id} className="employer-logo-card uniform">
+                                                {hasLogo ? (
+                                                    <img 
+                                                        src={logoUrl} 
+                                                        alt={employer.business_name || employer.acronym || 'Company Logo'}
+                                                        className="employer-logo"
+                                                        onError={(e) => {
+                                                            e.target.style.display = 'none';
+                                                            const placeholder = e.target.nextElementSibling;
+                                                            if (placeholder) {
+                                                                placeholder.style.display = 'flex';
+                                                            }
+                                                        }}
+                                                        onLoad={(e) => {
+                                                            const placeholder = e.target.nextElementSibling;
+                                                            if (placeholder) {
+                                                                placeholder.style.display = 'none';
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : (
+                                                    <div className="employer-logo-placeholder">
+                                                        {employer.acronym || (employer.business_name ? employer.business_name.substring(0, 2).toUpperCase() : 'CO')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="employers-empty">No registered employers yet.</div>
+                                )}
                             </div>
                         ) : (
                             <div className="employers-empty">No registered employers yet.</div>
