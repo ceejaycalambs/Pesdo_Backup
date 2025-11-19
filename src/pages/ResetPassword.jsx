@@ -22,6 +22,13 @@ const ResetPassword = () => {
   useEffect(() => {
     // Check if we have a valid session from the password reset link
     const checkSession = async () => {
+      // Set a timeout to prevent infinite loading (5 seconds max)
+      const timeoutId = setTimeout(() => {
+        console.error('⏱️ Session check timeout - no response after 5 seconds');
+        setError('Request timed out. Please try again or request a new password reset link.');
+        setVerifying(false);
+      }, 5000);
+
       try {
         console.log('🔐 Checking password reset session...');
         console.log('🔐 Current URL:', window.location.href);
@@ -47,50 +54,58 @@ const ResetPassword = () => {
         // Handle errors from hash fragments
         if (error) {
           console.error('❌ Password reset error from URL:', error, errorDescription);
+          clearTimeout(timeoutId);
           setError(errorDescription || 'Invalid or expired reset link. Please request a new password reset.');
           setVerifying(false);
           return;
         }
 
-        // If we have tokens in the hash, set the session
-        if (hashType === 'recovery' && accessToken) {
-          console.log('🔐 Processing password reset link from URL hash...');
-          console.log('🔐 Setting session with access token...');
-          
-          const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken || '',
-          });
-          
-          if (sessionError) {
-            console.error('❌ Error setting session from hash:', sessionError);
-            console.error('❌ Session error details:', {
-              message: sessionError.message,
-              status: sessionError.status,
-              name: sessionError.name
+        // If we have tokens in the hash, try to set the session
+        // Note: Sometimes type might not be 'recovery' but we still have valid tokens
+        if (accessToken) {
+          // Check if it's a recovery type or if we should try anyway
+          if (hashType === 'recovery' || !hashType) {
+            console.log('🔐 Processing password reset link from URL hash...');
+            console.log('🔐 Setting session with access token...');
+            
+            const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken || '',
             });
-            setError(sessionError.message || 'Invalid or expired reset link. Please request a new password reset.');
+            
+            if (sessionError) {
+              console.error('❌ Error setting session from hash:', sessionError);
+              console.error('❌ Session error details:', {
+                message: sessionError.message,
+                status: sessionError.status,
+                name: sessionError.name
+              });
+              clearTimeout(timeoutId);
+              setError(sessionError.message || 'Invalid or expired reset link. Please request a new password reset.');
+              setVerifying(false);
+              return;
+            }
+
+            // Verify session was set correctly
+            const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
+            if (verifyError || !verifySession) {
+              console.error('❌ Session verification failed after setting:', verifyError);
+              clearTimeout(timeoutId);
+              setError('Failed to verify session. Please try again.');
+              setVerifying(false);
+              return;
+            }
+
+            console.log('✅ Session set successfully from hash');
+            console.log('✅ User ID:', verifySession.user?.id);
+
+            // Clear the hash from URL after processing, but preserve query params
+            const newUrl = window.location.pathname + window.location.search;
+            window.history.replaceState(null, '', newUrl);
+            clearTimeout(timeoutId);
             setVerifying(false);
             return;
           }
-
-          // Verify session was set correctly
-          const { data: { session: verifySession }, error: verifyError } = await supabase.auth.getSession();
-          if (verifyError || !verifySession) {
-            console.error('❌ Session verification failed after setting:', verifyError);
-            setError('Failed to verify session. Please try again.');
-            setVerifying(false);
-            return;
-          }
-
-          console.log('✅ Session set successfully from hash');
-          console.log('✅ User ID:', verifySession.user?.id);
-
-          // Clear the hash from URL after processing, but preserve query params
-          const newUrl = window.location.pathname + window.location.search;
-          window.history.replaceState(null, '', newUrl);
-          setVerifying(false);
-          return;
         }
 
         // If tokens were passed from AuthCallback via state, set the session
@@ -103,18 +118,29 @@ const ResetPassword = () => {
           
           if (sessionError) {
             console.error('❌ Error setting session from state:', sessionError);
+            clearTimeout(timeoutId);
             setError('Invalid or expired reset link. Please request a new password reset.');
             setVerifying(false);
             return;
           }
+          clearTimeout(timeoutId);
           setVerifying(false);
           return;
         }
 
-        // Wait longer for Supabase's automatic session detection to process hash fragments
+        // If no hash and no state, check if user navigated directly (should show error)
+        if (!window.location.hash && !location.state?.accessToken) {
+          console.warn('⚠️ No reset link found - user may have navigated directly');
+          clearTimeout(timeoutId);
+          setError('No password reset link found. Please request a new password reset from the forgot password page.');
+          setVerifying(false);
+          return;
+        }
+
+        // Wait for Supabase's automatic session detection to process hash fragments
         // Supabase client might process the hash automatically
         console.log('🔐 Waiting for Supabase automatic session processing...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         // Check if we already have a valid session (from Supabase's automatic processing or previous manual processing)
         const { data: { session }, error: sessionCheckError } = await supabase.auth.getSession();
@@ -132,6 +158,7 @@ const ResetPassword = () => {
           console.error('   - The reset link was already used');
           console.error('   - The reset link is invalid');
           console.error('   - The hash fragments were not processed correctly');
+          clearTimeout(timeoutId);
           setError('Invalid or expired reset link. Please request a new password reset.');
           setVerifying(false);
           return;
@@ -140,9 +167,11 @@ const ResetPassword = () => {
         // Session is valid, allow password reset
         console.log('✅ Valid session found for password reset');
         console.log('✅ User:', session.user?.email);
+        clearTimeout(timeoutId);
         setVerifying(false);
       } catch (err) {
         console.error('❌ Error checking session:', err);
+        clearTimeout(timeoutId);
         setError('Failed to verify reset link. Please try again.');
         setVerifying(false);
       }
@@ -196,6 +225,27 @@ const ResetPassword = () => {
 
       if (updateError) {
         throw updateError;
+      }
+
+      console.log('✅ Password updated successfully. Signing out to force fresh login...');
+
+      // Clear any cached hints for this user (if available)
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
+        if (userId) {
+          localStorage.removeItem(`userType_${userId}`);
+        }
+      } catch (userFetchError) {
+        console.warn('⚠️ Unable to fetch user for localStorage cleanup:', userFetchError);
+      }
+
+      // Sign the user out so Supabase does not auto-redirect to dashboard
+      try {
+        await supabase.auth.signOut();
+        console.log('✅ User signed out after password reset');
+      } catch (signOutError) {
+        console.warn('⚠️ Failed to sign out automatically after password reset:', signOutError);
       }
 
       setSuccess(true);
