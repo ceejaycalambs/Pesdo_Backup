@@ -20,7 +20,7 @@ Technology Stack:
 - Backend: Supabase (PostgreSQL + Edge Functions)
 - Authentication: Supabase Auth
 - Storage: Supabase Storage
-- Notifications: Email (Edge Functions) + SMS (TextBee/Twilio)
+- Notifications: Email (Edge Functions) + SMS (TextBee)
 - Routing: React Router DOM v7
 
 Project Structure:
@@ -526,7 +526,7 @@ Deployment & Configuration
 Environment Setup:
 - Supabase Project URL & Keys
 - Email Service (Edge Functions)
-- SMS Service (TextBee/Twilio)
+- SMS Service (TextBee)
 - Storage Buckets Configuration
 - Realtime Enabled Tables
 

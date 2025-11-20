@@ -1,0 +1,346 @@
+PESDO Project - JavaScript File Structure Guide
+================================================
+
+All JavaScript files in this project are located in the 'src/' directory.
+This is a React application using JSX (JavaScript XML) format, so files have
+.jsx extension instead of .js (though both work).
+
+
+ROOT LEVEL JAVASCRIPT FILES
+============================
+
+src/main.jsx
+------------
+- Entry point of the application
+- Renders the App component into the DOM
+- Location: src/main.jsx
+
+src/App.jsx
+-----------
+- Main application component
+- Sets up routing (React Router)
+- Wraps entire app with AuthProvider
+- Location: src/App.jsx
+
+src/supabase.js
+---------------
+- Supabase client configuration
+- Database connection setup
+- Location: src/supabase.js
+
+src/firebase.js
+--------------
+- Firebase configuration (if used)
+- Location: src/firebase.js
+
+
+AUTHENTICATION & CONTEXT
+=========================
+
+src/contexts/AuthContext.jsx
+----------------------------
+- Authentication logic
+- User profile management
+- Login, signup, logout functions
+- User session management
+- Location: src/contexts/AuthContext.jsx
+
+
+PAGES (Main Application Components)
+===================================
+
+All page components are in src/pages/
+
+ADMIN PAGES:
+------------
+Location: src/pages/Admin/
+
+- AdminAnalytics.jsx          - Analytics dashboard
+- AdminDashboard.jsx          - Main admin dashboard
+- AdminLanding.jsx            - Admin landing page
+- AdminManagement.jsx         - Admin settings/management
+- EmployerVerification.jsx    - Employer verification (old version)
+- EmployerVerificationSimple.jsx - Employer verification (current)
+- JobManagement.jsx           - Job management (old version)
+- JobManagementSimplified.jsx - Job management (current)
+- SuperAdminLogs.jsx          - Activity logs (super admin only)
+- UserManagement.jsx          - User management interface
+
+
+EMPLOYER PAGES:
+---------------
+Location: src/pages/Employer/
+
+- EmployerDashboard.jsx       - Main employer dashboard
+  - Job submission
+  - Document upload
+  - Application management
+  - Profile management
+
+
+JOBSEEKER PAGES:
+----------------
+Location: src/pages/Jobseeker/
+
+- JobseekerDashboard.jsx      - Main jobseeker dashboard
+  - Browse jobs
+  - Apply to jobs
+  - Track applications
+  - Profile management
+
+
+AUTH PAGES:
+-----------
+Location: src/pages/
+
+- LandingPage.jsx             - Home/landing page
+- Register.jsx                - Registration page
+- AuthCallback.jsx            - OAuth callback handler
+- ForgotPassword.jsx          - Password reset request
+- ResetPassword.jsx           - Password reset form
+
+
+LOGIN PAGES:
+------------
+Location: src/Login/
+
+- Login.jsx                   - General login page
+- JobseekerLogin.jsx          - Jobseeker-specific login
+- EmployerLogin.jsx           - Employer-specific login
+
+
+SIGNUP PAGES:
+-------------
+Location: src/signUp/
+
+- SignUp.jsx                  - Signup page
+
+
+SERVICES (Business Logic)
+==========================
+
+Location: src/services/
+
+- emailService.js             - Email notification functions
+  - sendNewApplicationEmail()
+  - sendApplicationStatusEmail()
+  - sendJobApprovalEmail()
+  - sendEmployerVerificationEmail()
+  - sendNewJobSubmissionEmail()
+
+- smsService.js               - SMS notification functions
+  - sendNewApplicationSMS()
+  - sendApplicationStatusSMS()
+  - sendJobApprovalSMS()
+  - sendEmployerVerificationSMS()
+
+- api.js                      - API utility functions
+
+- firebaseService.js          - Firebase service functions
+
+
+HOOKS (Custom React Hooks)
+===========================
+
+Location: src/hooks/
+
+- useRealtimeData.js          - Real-time data subscriptions
+  - Subscribes to jobs, applications, profiles
+  - Auto-updates UI when data changes
+
+- useRealtimeNotifications.js - Real-time notification subscriptions
+  - Subscribes to notifications table
+  - Updates notification count in real-time
+
+
+COMPONENTS (Reusable UI Components)
+====================================
+
+Location: src/components/
+
+- NotificationButton.jsx      - Notification bell/button component
+- DatabaseManager.jsx         - Database management utility (if used)
+
+
+UTILITIES (Helper Functions)
+=============================
+
+Location: src/utils/
+
+- activityLogger.js           - Activity logging functions
+  - logActivity()
+  - logLogin()
+  - Tracks user actions in activity_logs table
+
+
+FILE EXTENSIONS EXPLANATION
+============================
+
+.jsx vs .js:
+------------
+- .jsx = JavaScript XML (React components)
+- .js = Plain JavaScript
+- Both work, but .jsx is preferred for React components
+- This project uses .jsx for components and .js for utilities
+
+
+COMPLETE FILE STRUCTURE
+========================
+
+src/
+├── main.jsx                    # Entry point
+├── App.jsx                     # Main app component & routing
+├── supabase.js                 # Supabase client config
+├── firebase.js                 # Firebase config
+│
+├── contexts/
+│   └── AuthContext.jsx         # Authentication context
+│
+├── pages/
+│   ├── Admin/                  # Admin pages
+│   │   ├── AdminAnalytics.jsx
+│   │   ├── AdminDashboard.jsx
+│   │   ├── AdminLanding.jsx
+│   │   ├── AdminManagement.jsx
+│   │   ├── EmployerVerificationSimple.jsx
+│   │   ├── JobManagementSimplified.jsx
+│   │   ├── SuperAdminLogs.jsx
+│   │   └── UserManagement.jsx
+│   │
+│   ├── Employer/
+│   │   └── EmployerDashboard.jsx
+│   │
+│   ├── Jobseeker/
+│   │   └── JobseekerDashboard.jsx
+│   │
+│   ├── LandingPage.jsx
+│   ├── Register.jsx
+│   ├── AuthCallback.jsx
+│   ├── ForgotPassword.jsx
+│   └── ResetPassword.jsx
+│
+├── Login/
+│   ├── Login.jsx
+│   ├── JobseekerLogin.jsx
+│   └── EmployerLogin.jsx
+│
+├── signUp/
+│   └── SignUp.jsx
+│
+├── services/
+│   ├── emailService.js
+│   ├── smsService.js
+│   ├── api.js
+│   └── firebaseService.js
+│
+├── hooks/
+│   ├── useRealtimeData.js
+│   └── useRealtimeNotifications.js
+│
+├── components/
+│   ├── NotificationButton.jsx
+│   └── DatabaseManager.jsx
+│
+└── utils/
+    └── activityLogger.js
+
+
+KEY JAVASCRIPT FILES BY FUNCTIONALITY
+======================================
+
+AUTHENTICATION:
+- src/contexts/AuthContext.jsx
+- src/pages/Register.jsx
+- src/Login/Login.jsx
+- src/Login/JobseekerLogin.jsx
+- src/Login/EmployerLogin.jsx
+
+EMPLOYER FEATURES:
+- src/pages/Employer/EmployerDashboard.jsx
+- src/pages/Admin/EmployerVerificationSimple.jsx
+
+JOBSEEKER FEATURES:
+- src/pages/Jobseeker/JobseekerDashboard.jsx
+
+ADMIN FEATURES:
+- src/pages/Admin/AdminDashboard.jsx
+- src/pages/Admin/JobManagementSimplified.jsx
+- src/pages/Admin/EmployerVerificationSimple.jsx
+- src/pages/Admin/UserManagement.jsx
+- src/pages/Admin/AdminAnalytics.jsx
+
+NOTIFICATIONS:
+- src/services/emailService.js
+- src/services/smsService.js
+- src/hooks/useRealtimeNotifications.js
+- src/components/NotificationButton.jsx
+
+REAL-TIME DATA:
+- src/hooks/useRealtimeData.js
+- src/hooks/useRealtimeNotifications.js
+
+DATABASE:
+- src/supabase.js
+- src/utils/activityLogger.js
+
+
+IMPORTANT NOTES
+================
+
+1. All JavaScript code is in the 'src/' directory
+2. React components use .jsx extension
+3. Utility functions can use .js extension
+4. Main entry point is src/main.jsx
+5. Routing is configured in src/App.jsx
+6. All pages are React components in src/pages/
+7. Reusable logic is in src/services/ and src/utils/
+8. Custom hooks are in src/hooks/
+9. Shared components are in src/components/
+
+
+HOW TO FIND A SPECIFIC FEATURE
+================================
+
+Looking for authentication code?
+→ src/contexts/AuthContext.jsx
+
+Looking for employer job submission?
+→ src/pages/Employer/EmployerDashboard.jsx (handleSubmitJob function)
+
+Looking for jobseeker application?
+→ src/pages/Jobseeker/JobseekerDashboard.jsx (handleApplyToJob function)
+
+Looking for admin job approval?
+→ src/pages/Admin/JobManagementSimplified.jsx (handleApproveJob function)
+
+Looking for email notifications?
+→ src/services/emailService.js
+
+Looking for SMS notifications?
+→ src/services/smsService.js
+
+Looking for real-time updates?
+→ src/hooks/useRealtimeData.js
+
+Looking for notification UI?
+→ src/components/NotificationButton.jsx
+
+Looking for activity logging?
+→ src/utils/activityLogger.js
+
+
+SUMMARY
+=======
+
+All JavaScript files are organized in the 'src/' directory with clear
+separation of concerns:
+
+- Pages: User-facing components (src/pages/)
+- Services: Business logic (src/services/)
+- Hooks: Reusable React hooks (src/hooks/)
+- Components: Reusable UI components (src/components/)
+- Utils: Helper functions (src/utils/)
+- Contexts: React context providers (src/contexts/)
+
+This structure makes it easy to find and maintain code.
+
