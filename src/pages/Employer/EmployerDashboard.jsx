@@ -1298,8 +1298,59 @@ const EmployerDashboard = () => {
     setJobSaving(true);
     setJobMessage({ type: null, text: '' });
 
+    // Validate dates
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     const validFrom = jobForm.valid_from || null;
     const validUntil = jobForm.valid_until || null;
+
+    // Validate valid_from: cannot be in the past
+    if (validFrom) {
+      const validFromDate = new Date(validFrom);
+      validFromDate.setHours(0, 0, 0, 0);
+      
+      if (validFromDate < today) {
+        setJobMessage({
+          type: 'error',
+          text: 'Valid From date cannot be in the past. Please select today or a future date.'
+        });
+        setJobSaving(false);
+        return;
+      }
+    }
+
+    // Validate valid_until: must be after valid_from (if both are provided)
+    if (validFrom && validUntil) {
+      const validFromDate = new Date(validFrom);
+      const validUntilDate = new Date(validUntil);
+      validFromDate.setHours(0, 0, 0, 0);
+      validUntilDate.setHours(0, 0, 0, 0);
+      
+      if (validUntilDate <= validFromDate) {
+        setJobMessage({
+          type: 'error',
+          text: 'Valid Until date must be after Valid From date.'
+        });
+        setJobSaving(false);
+        return;
+      }
+    }
+
+    // If only valid_until is provided, it should be in the future
+    if (validUntil && !validFrom) {
+      const validUntilDate = new Date(validUntil);
+      validUntilDate.setHours(0, 0, 0, 0);
+      
+      if (validUntilDate < today) {
+        setJobMessage({
+          type: 'error',
+          text: 'Valid Until date cannot be in the past.'
+        });
+        setJobSaving(false);
+        return;
+      }
+    }
 
     const pwdTypesArray =
       jobForm.accepts_pwd === 'Yes'
@@ -2042,6 +2093,9 @@ const EmployerDashboard = () => {
 
       <section>
         <h3 className="section-title">Posting Details</h3>
+        <p className="section-subtitle" style={{ marginBottom: '16px', fontSize: '0.9rem', color: '#64748b' }}>
+          Set when the job vacancy will be open for applications. Leave blank to make it immediately available after approval.
+        </p>
         <div className="form-grid">
           <label className="form-field">
             <span>Valid From</span>
@@ -2050,6 +2104,8 @@ const EmployerDashboard = () => {
               value={jobForm.valid_from}
               onChange={(e) => handleJobInputChange('valid_from', e.target.value)}
               disabled={!isVerified}
+              min={new Date().toISOString().split('T')[0]}
+              title="Select today or a future date. This is when jobseekers can start applying."
             />
           </label>
           <label className="form-field">
@@ -2059,6 +2115,8 @@ const EmployerDashboard = () => {
               value={jobForm.valid_until}
               onChange={(e) => handleJobInputChange('valid_until', e.target.value)}
               disabled={!isVerified}
+              min={jobForm.valid_from || new Date().toISOString().split('T')[0]}
+              title={jobForm.valid_from ? "Must be after Valid From date" : "Select today or a future date"}
             />
           </label>
         </div>
