@@ -44,6 +44,9 @@ const formatStatusLabel = (value = '', options = {}) => {
   const normalized = value.toString().trim().toLowerCase();
   if (!normalized) return '';
   if (options.treatApprovedAsVerified && normalized === 'approved') return 'Verified';
+  
+  // Special handling for withdrawn status
+  if (normalized === 'withdrawn') return 'Withdrawn';
 
   return normalized
     .split('_')

@@ -2510,12 +2510,15 @@ const JobManagementSimplified = () => {
                   // Only show if:
                   // 1. No application exists, OR
                   // 2. Application exists but status is 'referred' (can see already referred ones), OR
-                  // 3. Application exists with 'pending' status (canceled referrals become pending - can refer again)
-                  // Exclude: 'accepted', 'rejected'
+                  // 3. Application exists with 'pending' status (canceled referrals become pending - can refer again), OR
+                  // 4. Application exists with 'withdrawn' status (jobseeker canceled - admin can still refer)
+                  // Exclude: 'accepted', 'rejected', 'hired'
                   if (!existingApp) return true; // No application - can refer
-                  if (existingApp.status === 'referred') return true; // Already referred - show for reference
-                  if (existingApp.status === 'pending') return true; // Pending (including canceled referrals) - can refer
-                  return false; // Has accepted/rejected - hide
+                  const appStatus = (existingApp.status || '').toLowerCase();
+                  if (appStatus === 'referred') return true; // Already referred - show for reference
+                  if (appStatus === 'pending') return true; // Pending (including canceled referrals) - can refer
+                  if (appStatus === 'withdrawn') return true; // Withdrawn (jobseeker canceled) - admin can still refer
+                  return false; // Has accepted/rejected/hired - hide
                 });
 
                 return (

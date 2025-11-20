@@ -298,6 +298,8 @@ const JobseekerDashboard = () => {
   const [showJobModal, setShowJobModal] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [applyFeedback, setApplyFeedback] = useState({ type: null, text: '' });
+  const [showCancelConfirmModal, setShowCancelConfirmModal] = useState(false);
+  const [applicationToCancel, setApplicationToCancel] = useState(null);
 
   useEffect(() => {
     // Wait for profile to be loaded and user ID to be available
@@ -1592,11 +1594,18 @@ const JobseekerDashboard = () => {
     }
   };
 
-  const handleCancelApplication = async (applicationId) => {
-    if (!applicationId || !jobseekerId) return;
+  const handleCancelApplicationClick = (applicationId) => {
+    setApplicationToCancel(applicationId);
+    setShowCancelConfirmModal(true);
+  };
 
-    const confirmed = window.confirm('Are you sure you want to cancel this application? This action cannot be undone.');
-    if (!confirmed) return;
+  const handleCancelApplicationConfirm = async () => {
+    const applicationId = applicationToCancel;
+    if (!applicationId || !jobseekerId) {
+      setShowCancelConfirmModal(false);
+      setApplicationToCancel(null);
+      return;
+    }
 
     // Check if this is the currently selected job's application before removing from list
     const currentApplication = appliedJobs.find((app) => app.id === applicationId);
@@ -1614,6 +1623,10 @@ const JobseekerDashboard = () => {
 
       // Remove from applied jobs list
       setAppliedJobs((prev) => prev.filter((app) => app.id !== applicationId));
+
+      // Close confirmation modal first
+      setShowCancelConfirmModal(false);
+      setApplicationToCancel(null);
 
       // If canceling from job modal, close the modal and show feedback
       if (isSelectedJobApplication) {
@@ -1638,6 +1651,10 @@ const JobseekerDashboard = () => {
       console.error('Failed to cancel application:', error);
       const errorMessage = error.message || 'Unable to cancel the application. Please try again.';
       
+      // Close modal on error too
+      setShowCancelConfirmModal(false);
+      setApplicationToCancel(null);
+      
       if (isSelectedJobApplication) {
         setApplyFeedback({ type: 'error', text: errorMessage });
       } else {
@@ -1647,6 +1664,11 @@ const JobseekerDashboard = () => {
         });
       }
     }
+  };
+
+  const handleCancelApplicationCancel = () => {
+    setShowCancelConfirmModal(false);
+    setApplicationToCancel(null);
   };
 
   const renderAllJobs = () => {
@@ -2540,7 +2562,7 @@ const JobseekerDashboard = () => {
                 <button
                   type="button"
                   className="cancel-btn"
-                  onClick={() => handleCancelApplication(selectedJobApplication.id)}
+                  onClick={() => handleCancelApplicationClick(selectedJobApplication.id)}
                 >
                   Cancel Application
                 </button>
@@ -2558,6 +2580,60 @@ const JobseekerDashboard = () => {
           </dialog>
         </div>
       ) : null}
+
+      {/* Cancel Application Confirmation Modal */}
+      {showCancelConfirmModal && (
+        <div className="job-modal-overlay" onClick={handleCancelApplicationCancel}>
+          <dialog
+            className="job-modal"
+            open
+            aria-labelledby="cancel-confirm-title"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="job-modal-header">
+              <div className="job-modal-header-content">
+                <div>
+                  <h3 id="cancel-confirm-title">Cancel Application</h3>
+                  <p className="job-modal-subtitle">Are you sure you want to cancel this application?</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="job-modal-close-btn"
+                onClick={handleCancelApplicationCancel}
+                aria-label="Close confirmation"
+              >
+                ✕
+              </button>
+            </header>
+            <div className="job-modal-body">
+              <p style={{ marginBottom: '16px', color: '#64748b' }}>
+                This action will cancel your application. You can reapply to this job vacancy later if needed.
+              </p>
+              <p style={{ color: '#ef4444', fontWeight: '500' }}>
+                ⚠️ This action cannot be undone.
+              </p>
+            </div>
+            <footer className="job-modal-footer">
+              <button
+                type="button"
+                className="outline-btn"
+                onClick={handleCancelApplicationCancel}
+              >
+                Keep Application
+              </button>
+              <button
+                type="button"
+                className="cancel-btn"
+                onClick={handleCancelApplicationConfirm}
+              >
+                Yes, Cancel Application
+              </button>
+            </footer>
+          </dialog>
+        </div>
+      )}
     </div>
   );
 };
