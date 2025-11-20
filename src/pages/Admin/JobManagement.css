@@ -479,6 +479,8 @@
 
 .jobs-table.pending .status-badge { background: #e5e7eb; color:#374151; border:1px solid #d1d5db; }
 .jobs-table.approved .status-badge { background:#d1fae5; color:#065f46; border:1px solid #a7f3d0; }
+.jobs-table.rejected .status-badge { background:#fee2e2; color:#991b1b; border:1px solid #fecaca; }
+.jobs-table.archived .status-badge { background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; }
 
 .jobs-table td button {
   border: none;
@@ -493,6 +495,8 @@
 .jobs-table td .btn-quick.view:hover { background:#bae6fd; }
 .jobs-table td .btn-warning { background:#f59e0b; color:#fff; }
 .jobs-table td .btn-warning:hover { background:#d97706; }
+.jobs-table td .btn-danger { background:#dc2626; color:#fff; }
+.jobs-table td .btn-danger:hover { background:#b91c1c; }
 .jobs-table td .btn-primary { background:#2563eb; color:#fff; }
 .jobs-table td .btn-primary:hover { background:#1d4ed8; }
 
@@ -2172,6 +2176,35 @@
 }
 
 .btn-warning:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Danger Button Style */
+.btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(185, 28, 28, 0.3);
+}
+
+.btn-danger:disabled {
   background: #9ca3af;
   cursor: not-allowed;
   transform: none;

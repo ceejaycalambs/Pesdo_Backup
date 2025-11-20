@@ -172,7 +172,7 @@ const EmployerDashboard = () => {
   const employerId = currentUser?.id;
   
   const [activeTab, setActiveTab] = useState('profile');
-  const [jobStatusTab, setJobStatusTab] = useState('pending'); // 'pending', 'approved', 'rejected'
+  const [jobStatusTab, setJobStatusTab] = useState('pending'); // 'pending', 'approved', 'rejected', 'completed'
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Disable body scrolling on desktop, enable on mobile
@@ -295,6 +295,7 @@ const EmployerDashboard = () => {
   const [pendingJobs, setPendingJobs] = useState([]);
   const [approvedJobs, setApprovedJobs] = useState([]);
   const [rejectedJobs, setRejectedJobs] = useState([]);
+  const [completedJobs, setCompletedJobs] = useState([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError] = useState('');
   const [jobSearchQuery, setJobSearchQuery] = useState('');
@@ -351,6 +352,11 @@ const EmployerDashboard = () => {
   const filteredRejectedJobs = useMemo(
     () => filterJobsByQuery(rejectedJobs),
     [filterJobsByQuery, rejectedJobs]
+  );
+
+  const filteredCompletedJobs = useMemo(
+    () => filterJobsByQuery(completedJobs),
+    [filterJobsByQuery, completedJobs]
   );
 
   const extractStoragePathFromUrl = (publicUrl) => {
@@ -521,11 +527,13 @@ const EmployerDashboard = () => {
           .from('jobvacancypending')
           .select('*')
           .eq('employer_id', employerId)
+          // Don't filter by status - we want all statuses (pending, rejected, etc.)
           .order('created_at', { ascending: false }),
         supabase
           .from('jobs')
           .select('*')
           .eq('employer_id', employerId)
+          // Don't filter by status - we want all statuses
           .order('created_at', { ascending: false })
       ]);
 
@@ -535,16 +543,52 @@ const EmployerDashboard = () => {
       const pendingRows = pendingResult.data || [];
       const approvedRows = approvedResult.data || [];
 
-      const pending = pendingRows.filter(
-        (job) => (job.status || 'pending').toLowerCase() === 'pending'
-      );
+      const pending = [];
+      const rejectedFromPending = [];
+
+      for (const job of pendingRows) {
+        const status = (job.status || 'pending').toString().trim().toLowerCase();
+        if (status === 'pending') {
+          pending.push(job);
+        } else if (status === 'rejected') {
+          rejectedFromPending.push(job);
+        } else {
+          // Log any unexpected statuses for debugging
+          console.log('⚠️ Job with unexpected status:', { id: job.id, status: job.status, title: job.position_title });
+        }
+      }
+
+      // Debug logging to help troubleshoot rejected jobs
+      console.log('📊 Job Status Summary:', {
+        totalPendingRows: pendingRows.length,
+        pending: pending.length,
+        rejectedFromPending: rejectedFromPending.length,
+        rejectedJobs: rejectedFromPending.map(j => ({ id: j.id, status: j.status, title: j.position_title }))
+      });
+
       const approved = approvedRows.filter((job) => {
-        const status = (job.status || '').toLowerCase();
+        const status = (job.status || '').toString().trim().toLowerCase();
         return status === 'approved' || status === 'active';
       });
-      const rejected = approvedRows.filter((job) => {
-        const status = (job.status || '').toLowerCase();
+
+      const rejectedFromActive = approvedRows.filter((job) => {
+        const status = (job.status || '').toString().trim().toLowerCase();
         return status === 'rejected';
+      });
+
+      const rejected = [...rejectedFromPending, ...rejectedFromActive].sort((a, b) => {
+        const dateA = new Date(a.reviewed_at || a.updated_at || a.created_at || 0).getTime();
+        const dateB = new Date(b.reviewed_at || b.updated_at || b.created_at || 0).getTime();
+        return dateB - dateA;
+      });
+
+      // Final debug log
+      console.log('📋 Final Job Counts:', {
+        pending: pending.length,
+        approved: approved.length,
+        rejected: rejected.length,
+        rejectedFromPending: rejectedFromPending.length,
+        rejectedFromActive: rejectedFromActive.length
       });
 
       const jobIds = Array.from(
@@ -593,8 +637,34 @@ const EmployerDashboard = () => {
         }
       }
 
+      // Calculate completed jobs (all vacancies filled)
+      const completed = [];
+      const stillOpen = [];
+      
+      for (const job of approved) {
+        const jobId = job.id;
+        const jobApplicationsList = applicationsByJob[jobId] || [];
+        
+        // Count accepted/hired applications
+        const acceptedCount = jobApplicationsList.filter((app) => {
+          const status = (app.status || '').toLowerCase();
+          return status === 'accepted' || status === 'hired';
+        }).length;
+        
+        // Get vacancy count
+        const vacancyCount = job.vacancy_count || job.total_positions || job.vacancies || 0;
+        
+        // Job is completed if all vacancies are filled
+        if (vacancyCount > 0 && acceptedCount >= vacancyCount) {
+          completed.push(job);
+        } else {
+          stillOpen.push(job);
+        }
+      }
+      
       setPendingJobs(pending);
-      setApprovedJobs(approved);
+      setApprovedJobs(stillOpen); // Only show non-completed approved jobs in approved tab
+      setCompletedJobs(completed);
       setRejectedJobs(rejected);
       setJobApplications((prev) => {
         const next = {};
@@ -652,22 +722,30 @@ const EmployerDashboard = () => {
 
     // Check if this is a job status notification or application notification
     if (notificationData.job_id) {
-      // Find the job in the jobs list
-      const allJobs = [...pendingJobs, ...approvedJobs, ...rejectedJobs];
+      // Find the job in the jobs list (include completed jobs)
+      const allJobs = [...pendingJobs, ...approvedJobs, ...rejectedJobs, ...completedJobs];
       const job = allJobs.find(j => j.id === notificationData.job_id);
       
       if (job) {
-        // Determine job status
-        const status = (job.status || '').toLowerCase();
+        // Determine job status - check if it's in completed jobs first
         let statusClass = 'pending';
-        if (status === 'approved' || status === 'active') {
-          statusClass = 'approved';
-        } else if (status === 'rejected') {
-          statusClass = 'rejected';
+        let targetTab = 'pending';
+        
+        if (completedJobs.some(j => j.id === job.id)) {
+          statusClass = 'completed';
+          targetTab = 'completed';
+        } else {
+          const status = (job.status || '').toLowerCase();
+          if (status === 'approved' || status === 'active') {
+            statusClass = 'approved';
+            targetTab = 'approved';
+          } else if (status === 'rejected') {
+            statusClass = 'rejected';
+            targetTab = 'rejected';
+          }
         }
         
         // Set the appropriate tab and open job details
-        const targetTab = statusClass === 'approved' ? 'approved' : statusClass === 'rejected' ? 'rejected' : 'pending';
         setJobStatusTab(targetTab);
         
         // Open job details
@@ -687,17 +765,25 @@ const EmployerDashboard = () => {
         // If job not found, refresh and try again
         fetchJobs().then(() => {
           setTimeout(() => {
-            const updatedAllJobs = [...pendingJobs, ...approvedJobs, ...rejectedJobs];
+            const updatedAllJobs = [...pendingJobs, ...approvedJobs, ...rejectedJobs, ...completedJobs];
             const updatedJob = updatedAllJobs.find(j => j.id === notificationData.job_id);
             if (updatedJob) {
-              const status = (updatedJob.status || '').toLowerCase();
               let statusClass = 'pending';
-              if (status === 'approved' || status === 'active') {
-                statusClass = 'approved';
-              } else if (status === 'rejected') {
-                statusClass = 'rejected';
+              let targetTab = 'pending';
+              
+              if (completedJobs.some(j => j.id === updatedJob.id)) {
+                statusClass = 'completed';
+                targetTab = 'completed';
+              } else {
+                const status = (updatedJob.status || '').toLowerCase();
+                if (status === 'approved' || status === 'active') {
+                  statusClass = 'approved';
+                  targetTab = 'approved';
+                } else if (status === 'rejected') {
+                  statusClass = 'rejected';
+                  targetTab = 'rejected';
+                }
               }
-              const targetTab = statusClass === 'approved' ? 'approved' : statusClass === 'rejected' ? 'rejected' : 'pending';
               setJobStatusTab(targetTab);
               
               // Open job details
@@ -721,7 +807,7 @@ const EmployerDashboard = () => {
       // Just switch to manage tab - the user can see their jobs
       setJobStatusTab('pending');
     }
-  }, [pendingJobs, approvedJobs, rejectedJobs, fetchJobs]);
+  }, [pendingJobs, approvedJobs, rejectedJobs, completedJobs, fetchJobs]);
 
   const profileDisplayName = useMemo(() => profile?.business_name || 'Company Profile', [profile]);
 
@@ -1967,11 +2053,13 @@ const EmployerDashboard = () => {
     const hasPending = (pendingJobs || []).length > 0;
     const hasApproved = (approvedJobs || []).length > 0;
     const hasRejected = (rejectedJobs || []).length > 0;
+    const hasCompleted = (completedJobs || []).length > 0;
     const hasFilteredPending = filteredPendingJobs.length > 0;
     const hasFilteredApproved = filteredApprovedJobs.length > 0;
     const hasFilteredRejected = filteredRejectedJobs.length > 0;
+    const hasFilteredCompleted = filteredCompletedJobs.length > 0;
 
-    if (!hasPending && !hasApproved && !hasRejected) {
+    if (!hasPending && !hasApproved && !hasRejected && !hasCompleted) {
       return (
         <div className="empty-state">
           <div className="empty-icon">📋</div>
@@ -2031,12 +2119,20 @@ const EmployerDashboard = () => {
     const getPostedLabel = (job) =>
       formatDateLabel(job.created_at || job.posting_date || job.submitted_at);
 
+    const getValidFromLabel = (job) =>
+      formatDateLabel(job.valid_from || job.validFrom);
+
+    const getValidUntilLabel = (job) =>
+      formatDateLabel(job.valid_until || job.validUntil);
+
     const renderJobCard = (job, statusLabel, statusClass) => {
       const metrics = getJobMetrics(job);
       const locationLabel = getLocationLabel(job);
       const natureLabel = getNatureLabel(job);
       const salaryLabel = getSalaryLabel(job);
       const postedLabel = getPostedLabel(job);
+      const validFromLabel = getValidFromLabel(job);
+      const validUntilLabel = getValidUntilLabel(job);
       const vacancyLabel = metrics.vacancy || '—';
       const responsesLabel = `${metrics.responses}/${metrics.vacancy || '—'}`;
       const statusChipText = metrics.filled ? 'Filled' : 'Open';
@@ -2070,12 +2166,27 @@ const EmployerDashboard = () => {
                 <span className="meta-label">🗓 Posted</span>
                 <span className="meta-value">{postedLabel}</span>
               </div>
+              <div className="meta-item">
+                <span className="meta-label">📅 Valid From</span>
+                <span className="meta-value">{validFromLabel}</span>
+              </div>
+              <div className="meta-item">
+                <span className="meta-label">⏳ Valid Until</span>
+                <span className="meta-value">{validUntilLabel}</span>
+              </div>
             </div>
           </div>
 
           <p className="job-description modern">
             {job.description || job.job_description || 'No description provided.'}
           </p>
+
+          {statusClass === 'rejected' && job.review_notes ? (
+            <div className="job-alert warning">
+              <span className="meta-label">Rejection Note</span>
+              <p>{job.review_notes}</p>
+            </div>
+          ) : null}
 
           <div className="job-metrics">
             <div className="metric-card">
@@ -2140,6 +2251,14 @@ const EmployerDashboard = () => {
             statusClass: 'rejected',
             emptyMessage: jobSearchQuery ? 'No rejected jobs match your search.' : 'No rejected jobs at this time.'
           };
+        case 'completed':
+          return {
+            jobs: filteredCompletedJobs,
+            hasJobs: hasFilteredCompleted,
+            statusLabel: 'Completed',
+            statusClass: 'completed',
+            emptyMessage: jobSearchQuery ? 'No completed jobs match your search.' : 'No completed jobs at this time.'
+          };
         default:
           return {
             jobs: [],
@@ -2188,6 +2307,16 @@ const EmployerDashboard = () => {
                 <span className="tab-count">{rejectedJobs.length}</span>
               )}
             </button>
+            <button
+              type="button"
+              className={`job-status-tab ${jobStatusTab === 'completed' ? 'active' : ''}`}
+              onClick={() => setJobStatusTab('completed')}
+            >
+              <span>Complete Job Vacancy</span>
+              {completedJobs.length > 0 && (
+                <span className="tab-count">{completedJobs.length}</span>
+              )}
+            </button>
           </div>
 
           {/* Current Tab Content */}
@@ -2195,7 +2324,8 @@ const EmployerDashboard = () => {
             <h2>
               {jobStatusTab === 'pending' ? 'Pending Review' :
                jobStatusTab === 'approved' ? 'Approved Vacancies' :
-               'Rejected Vacancies'}
+               jobStatusTab === 'rejected' ? 'Rejected Vacancies' :
+               'Complete Job Vacancy'}
             </h2>
             {currentJobs.hasJobs ? (
               <div className="cards-row">
@@ -2672,7 +2802,8 @@ const EmployerDashboard = () => {
                     Found {
                       jobStatusTab === 'pending' ? filteredPendingJobs.length :
                       jobStatusTab === 'approved' ? filteredApprovedJobs.length :
-                      filteredRejectedJobs.length
+                      jobStatusTab === 'rejected' ? filteredRejectedJobs.length :
+                      filteredCompletedJobs.length
                     } job(s)
                   </div>
                 )}

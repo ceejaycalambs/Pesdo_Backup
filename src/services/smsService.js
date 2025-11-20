@@ -121,10 +121,15 @@ export const sendNewApplicationSMS = async (phoneNumber, employerName, jobseeker
 };
 
 // Job approval notification (for employers)
-export const sendJobApprovalSMS = async (phoneNumber, employerName, jobTitle, status) => {
-  const message = status === 'approved'
-    ? `Hi ${employerName}! Your job vacancy "${jobTitle}" has been APPROVED and is now live. - PESDO`
-    : `Hi ${employerName}! Update on your job vacancy "${jobTitle}": ${status}. Check dashboard for details. - PESDO`;
+export const sendJobApprovalSMS = async (phoneNumber, employerName, jobTitle, status, rejectionNote = '') => {
+  let message;
+  if (status === 'approved') {
+    message = `Hi ${employerName}! Your job vacancy "${jobTitle}" has been APPROVED and is now live. - PESDO`;
+  } else if (status === 'rejected') {
+    message = `Hi ${employerName}! Your job vacancy "${jobTitle}" was REJECTED.${rejectionNote ? ` Reason: ${rejectionNote}.` : ''} Check the dashboard for details. - PESDO`;
+  } else {
+    message = `Hi ${employerName}! Update on your job vacancy "${jobTitle}": ${status}. Check dashboard for details. - PESDO`;
+  }
   
   const formattedPhone = formatPhoneNumber(phoneNumber);
 

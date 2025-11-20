@@ -15,11 +15,10 @@ const JobManagementSimplified = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [pendingJobs, setPendingJobs] = useState([]);
   const [approvedJobs, setApprovedJobs] = useState([]);
+  const [rejectedJobs, setRejectedJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
   const [showJobModal, setShowJobModal] = useState(false);
-  const [jobApplicants, setJobApplicants] = useState([]);
-  const [loadingApplicants, setLoadingApplicants] = useState(false);
   const [jobApplicantsForModal, setJobApplicantsForModal] = useState([]);
   const [loadingJobApplicants, setLoadingJobApplicants] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -41,6 +40,10 @@ const JobManagementSimplified = () => {
   const [referStatusFilter, setReferStatusFilter] = useState('all');
   const [referNameSearch, setReferNameSearch] = useState('');
   const [adminRole, setAdminRole] = useState(null); // 'admin' or 'super_admin'
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [jobToReject, setJobToReject] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isRejecting, setIsRejecting] = useState(false);
 
   // Realtime notifications
   const {
@@ -150,9 +153,29 @@ const JobManagementSimplified = () => {
     [pendingJobs, jobSearchTerm, jobTypeFilter]
   );
 
-  const filteredApprovedJobs = useMemo(
-    () => applyJobFilters(approvedJobs, 'approved', false),
-    [approvedJobs, jobSearchTerm, jobTypeFilter]
+  // Calculate archived jobs (jobs where all positions are filled)
+  const filteredArchivedJobs = useMemo(() => {
+    const archived = approvedJobs.filter((job) => {
+      const placedCount = getPlacedCount(job.id);
+      const vacancyCount = Number(job.vacancy_count || job.total_positions || 0);
+      return vacancyCount > 0 && placedCount >= vacancyCount;
+    });
+    return applyJobFilters(archived, 'archived', false);
+  }, [approvedJobs, applicationsByJob, jobSearchTerm, jobTypeFilter, getPlacedCount]);
+
+  // Active approved jobs (not archived)
+  const filteredActiveApprovedJobs = useMemo(() => {
+    const active = approvedJobs.filter((job) => {
+      const placedCount = getPlacedCount(job.id);
+      const vacancyCount = Number(job.vacancy_count || job.total_positions || 0);
+      return !(vacancyCount > 0 && placedCount >= vacancyCount);
+    });
+    return applyJobFilters(active, 'approved', false);
+  }, [approvedJobs, applicationsByJob, jobSearchTerm, jobTypeFilter, getPlacedCount]);
+
+  const filteredRejectedJobs = useMemo(
+    () => applyJobFilters(rejectedJobs, 'rejected', false),
+    [rejectedJobs, jobSearchTerm, jobTypeFilter]
   );
 
   const filteredReferJobs = useMemo(() => {
@@ -858,6 +881,7 @@ const JobManagementSimplified = () => {
       if (!existingEmployerIds.length) {
         setPendingJobs([]);
         setApprovedJobs([]);
+        setRejectedJobs([]);
         setLoading(false);
         return;
       }
@@ -917,9 +941,10 @@ const JobManagementSimplified = () => {
       // Filter out jobs from deleted employers
       // ONLY include jobs where the employer_id exists AND the employer still exists in employer_profiles
       const pendingList = [];
+      const rejectedList = [];
+      
       for (const job of pendingRows) {
         const status = (job.status || 'pending').toLowerCase();
-        if (status !== 'pending') continue;
         
         // STRICT: Only include jobs with a valid employer_id that exists in employerMap
         if (!job.employer_id) {
@@ -932,7 +957,7 @@ const JobManagementSimplified = () => {
           continue;
         }
         
-        pendingList.push({
+        const jobWithEmployer = {
           ...job,
           business_name: employerMap[job.employer_id]?.business_name || 'Company Name Not Provided',
           company_logo_url:
@@ -940,28 +965,34 @@ const JobManagementSimplified = () => {
             job.company_logo_url ||
             employerMap[job.employer_id]?.company_logo_url ||
             null
-        });
+        };
+        
+        if (status === 'pending') {
+          pendingList.push(jobWithEmployer);
+        } else if (status === 'rejected') {
+          rejectedList.push(jobWithEmployer);
+        }
       }
  
-      const approvedList = approvedRows
-        .filter((job) => {
-          const status = (job.status || '').toLowerCase();
-          if (status !== 'approved' && status !== 'active') return false;
-          
-          // STRICT: Only include jobs with a valid employer_id that exists in employerMap
-          if (!job.employer_id) {
-            console.log(`Skipping job ${job.id} - no employer_id`);
-            return false;
-          }
-          
-          if (!employerMap[job.employer_id]) {
-            console.log(`Skipping job ${job.id} - employer ${job.employer_id} has been deleted`);
-            return false;
-          }
-          
-          return true;
-        })
-        .map((job) => ({
+      const approvedList = [];
+      const archivedList = [];
+      
+      for (const job of approvedRows) {
+        const status = (job.status || '').toLowerCase();
+        if (status !== 'approved' && status !== 'active') continue;
+        
+        // STRICT: Only include jobs with a valid employer_id that exists in employerMap
+        if (!job.employer_id) {
+          console.log(`Skipping job ${job.id} - no employer_id`);
+          continue;
+        }
+        
+        if (!employerMap[job.employer_id]) {
+          console.log(`Skipping job ${job.id} - employer ${job.employer_id} has been deleted`);
+          continue;
+        }
+        
+        const jobWithEmployer = {
           ...job,
           business_name: employerMap[job.employer_id]?.business_name || 'Company Name Not Provided',
           company_logo_url:
@@ -969,12 +1000,16 @@ const JobManagementSimplified = () => {
             job.company_logo_url ||
             employerMap[job.employer_id]?.company_logo_url ||
             null
-        }));
+        };
+        
+        approvedList.push(jobWithEmployer);
+      }
 
-      console.log(`📊 Filtered results: ${pendingList.length} pending jobs, ${approvedList.length} approved jobs (from ${pendingRows.length} pending, ${approvedRows.length} approved total)`);
+      console.log(`📊 Filtered results: ${pendingList.length} pending, ${approvedList.length} approved, ${rejectedList.length} rejected jobs`);
       
       setPendingJobs(pendingList);
       setApprovedJobs(approvedList);
+      setRejectedJobs(rejectedList);
     } catch (err) {
       console.error('Error fetching jobs:', err);
       showNotification('error', `Failed to load jobs: ${err.message}`);
@@ -1271,6 +1306,182 @@ const JobManagementSimplified = () => {
     }
   };
 
+  const handleRejectJob = async (job, reason) => {
+    if (!job?.id) {
+      showNotification('error', 'Unable to reject job: missing job information.');
+      return false;
+    }
+
+    const rejectionNote = sanitizeText(reason);
+    if (!rejectionNote) {
+      showNotification('error', 'Please provide a note before rejecting the job.');
+      return false;
+    }
+
+    try {
+      const timestamp = new Date().toISOString();
+
+      const { error } = await supabase
+        .from('jobvacancypending')
+        .update({
+          status: 'rejected',
+          updated_at: timestamp,
+          reviewed_at: timestamp,
+          reviewed_by: currentUser?.id || null,
+          review_notes: rejectionNote
+        })
+        .eq('id', job.id);
+
+      if (error) throw error;
+
+      if (job.employer_id) {
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert([{
+            employer_id: job.employer_id,
+            type: 'job_rejected',
+            title: 'Job Vacancy Rejected',
+            message: rejectionNote
+              ? `Your job vacancy for "${job.position_title || job.title || 'Job'}" was rejected. Reason: ${rejectionNote}`
+              : `Your job vacancy for "${job.position_title || job.title || 'Job'}" was rejected. Please review and resubmit.`,
+            job_id: job.id,
+            is_read: false,
+            created_at: timestamp
+          }]);
+
+        if (notificationError) {
+          console.error('Error creating rejection notification:', notificationError);
+        }
+      }
+
+      // Send SMS and Email notifications to employer (non-blocking)
+      try {
+        // Fetch employer profile
+        const { data: employerProfile } = await supabase
+          .from('employer_profiles')
+          .select('mobile_number, email, contact_email, business_name, contact_person_name')
+          .eq('id', job.employer_id)
+          .single();
+
+        if (employerProfile) {
+          const employerName = employerProfile.contact_person_name || employerProfile.business_name || 'Employer';
+          const jobTitle = job.position_title || job.title || 'Job Vacancy';
+          const employerEmail = employerProfile.contact_email || employerProfile.email;
+
+          // Send SMS if mobile number is available
+          if (employerProfile.mobile_number) {
+            sendJobApprovalSMS(
+              employerProfile.mobile_number,
+              employerName,
+              jobTitle,
+              'rejected',
+              rejectionNote
+            ).then(() => {
+              console.log('✅ SMS notification sent to employer for rejection');
+            }).catch((smsError) => {
+              console.error('⚠️ Failed to send SMS notification (non-critical):', smsError);
+            });
+          }
+
+          // Send Email if email is available
+          if (employerEmail) {
+            sendJobApprovalEmail(
+              employerEmail,
+              employerName,
+              jobTitle,
+              'rejected',
+              rejectionNote
+            ).then(() => {
+              console.log('✅ Email notification sent to employer for rejection');
+            }).catch((emailError) => {
+              console.error('⚠️ Failed to send email notification (non-critical):', emailError);
+            });
+          }
+        }
+      } catch (notificationError) {
+        // Notification failures should not block the main action
+        console.error('⚠️ Failed to send notifications (non-critical):', notificationError);
+      }
+
+      if (currentUser?.id) {
+        const { data: adminProfile } = await supabase
+          .from('admin_profiles')
+          .select('first_name, last_name, username, email')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+
+        const adminName = adminProfile
+          ? `${adminProfile.first_name || ''} ${adminProfile.last_name || ''}`.trim() ||
+            adminProfile.username ||
+            adminProfile.email ||
+            'Admin'
+          : 'Admin';
+
+        let companyName = job.business_name || 'the company';
+        if (job.employer_id) {
+          const { data: employerProfile } = await supabase
+            .from('employer_profiles')
+            .select('business_name')
+            .eq('id', job.employer_id)
+            .maybeSingle();
+          companyName = employerProfile?.business_name || companyName;
+        }
+
+        await logActivity({
+          userId: currentUser.id,
+          userType: adminRole === 'super_admin' ? 'super_admin' : 'admin',
+          actionType: 'job_rejected',
+          actionDescription: `${adminName} rejected ${job.position_title || job.title || 'a job vacancy'} of ${companyName}`,
+          entityType: 'job',
+          entityId: job.id,
+          metadata: {
+            adminName,
+            jobTitle: job.position_title || job.title,
+            employerId: job.employer_id,
+            vacancyCount: job.vacancy_count,
+            companyName,
+            rejectionReason: rejectionNote
+          }
+        });
+      }
+
+      await fetchJobs();
+      showNotification('success', '❌ Job vacancy rejected.');
+      return true;
+    } catch (rejectError) {
+      console.error('Error rejecting job:', rejectError);
+      showNotification('error', `Failed to reject job: ${rejectError.message}`);
+      return false;
+    }
+  };
+
+  const openRejectModal = (job) => {
+    setJobToReject(job);
+    setRejectReason(job.review_notes || '');
+    setShowRejectModal(true);
+  };
+
+  const closeRejectModal = () => {
+    setShowRejectModal(false);
+    setJobToReject(null);
+    setRejectReason('');
+    setIsRejecting(false);
+  };
+
+  const handleRejectModalSubmit = async () => {
+    if (!jobToReject) return;
+    if (!rejectReason.trim()) {
+      showNotification('error', 'Please add a rejection note before submitting.');
+      return;
+    }
+    setIsRejecting(true);
+    const success = await handleRejectJob(jobToReject, rejectReason);
+    setIsRejecting(false);
+    if (success) {
+      closeRejectModal();
+    }
+  };
+
   const handleViewJob = (job, jobType) => {
     setSelectedJob({ ...job, jobType });
     setShowJobModal(true);
@@ -1491,7 +1702,7 @@ const JobManagementSimplified = () => {
                     <td><span className="status-badge pending">Pending</span></td>
                     <td style={{whiteSpace:'nowrap'}}>
                       <button className="btn-quick view" onClick={() => handleViewJob(job, 'pending')}>View</button>
-                      <button className="btn-warning" onClick={() => handleEditJob(job)}>Edit</button>
+                      <button className="btn-danger" onClick={() => openRejectModal(job)}>Reject</button>
                       <button className="btn-primary" onClick={() => handleApproveJob(job)}>Approve</button>
                     </td>
                   </tr>
@@ -1511,7 +1722,7 @@ const JobManagementSimplified = () => {
   };
 
   const renderApprovedJobs = () => {
-    const hasJobs = filteredApprovedJobs.length > 0;
+    const hasJobs = filteredActiveApprovedJobs.length > 0;
 
     return (
       <>
@@ -1532,7 +1743,7 @@ const JobManagementSimplified = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredApprovedJobs.map((job) => {
+                {filteredActiveApprovedJobs.map((job) => {
                   const placedCount = getPlacedCount(job.id);
                   const vacancyCount = Number(job.vacancy_count || job.total_positions || 0);
                   const placedDisplay = vacancyCount > 0 
@@ -1575,6 +1786,144 @@ const JobManagementSimplified = () => {
             <div className="no-jobs-icon">✅</div>
             <h3>No Approved Jobs</h3>
             <p>Try adjusting your filters or refresh the list.</p>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderRejectedJobs = () => {
+    const hasJobs = filteredRejectedJobs.length > 0;
+
+    return (
+      <>
+        {renderJobFilters(false)}
+        {hasJobs ? (
+          <div className="table-wrapper">
+            <table className="jobs-table rejected">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Position</th>
+                  <th>Location</th>
+                  <th>Type</th>
+                  <th>Vacancies</th>
+                  <th>Status</th>
+                  <th>Rejection Note</th>
+                  <th>Rejected Date</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRejectedJobs.map((job) => (
+                  <tr key={job.id}>
+                    <td>
+                      <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                        {job.company_logo_url && (
+                          <img src={job.company_logo_url} alt="logo" style={{width:28,height:28,borderRadius:4,objectFit:'cover'}} />
+                        )}
+                        <span>{job.business_name || 'Company Name Not Provided'}</span>
+                      </div>
+                    </td>
+                    <td>{job.position_title || job.title}</td>
+                    <td>{job.place_of_work || job.location}</td>
+                    <td>{job.nature_of_work || job.job_type}</td>
+                    <td>{job.vacancy_count || '—'}</td>
+                    <td><span className="status-badge rejected">Rejected</span></td>
+                    <td>{job.review_notes || '—'}</td>
+                    <td>
+                      {job.reviewed_at 
+                        ? new Date(job.reviewed_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })
+                        : '—'}
+                    </td>
+                    <td style={{whiteSpace:'nowrap'}}>
+                      <button className="btn-quick view" onClick={() => handleViewJob(job, 'rejected')}>View</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="no-jobs">
+            <div className="no-jobs-icon">❌</div>
+            <h3>No Rejected Jobs</h3>
+            <p>No rejected job vacancies found.</p>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  const renderArchivedJobs = () => {
+    const hasJobs = filteredArchivedJobs.length > 0;
+
+    return (
+      <>
+        {renderJobFilters(false)}
+        {hasJobs ? (
+          <div className="table-wrapper">
+            <table className="jobs-table archived">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Position</th>
+                  <th>Location</th>
+                  <th>Type</th>
+                  <th>Vacancies</th>
+                  <th>Placed</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredArchivedJobs.map((job) => {
+                  const placedCount = getPlacedCount(job.id);
+                  const vacancyCount = Number(job.vacancy_count || job.total_positions || 0);
+                  const placedDisplay = vacancyCount > 0 
+                    ? `${placedCount}/${vacancyCount}` 
+                    : placedCount > 0 
+                      ? `${placedCount}` 
+                      : '0';
+                  
+                  return (
+                    <tr key={job.id}>
+                      <td>
+                        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                          {job.company_logo_url && (
+                            <img src={job.company_logo_url} alt="logo" style={{width:28,height:28,borderRadius:4,objectFit:'cover'}} />
+                          )}
+                          <span>{job.business_name || 'Company Name Not Provided'}</span>
+                        </div>
+                      </td>
+                      <td>{job.title || job.position_title}</td>
+                      <td>{job.location || job.place_of_work}</td>
+                      <td>{job.job_type || job.nature_of_work}</td>
+                      <td>{job.vacancy_count || job.total_positions || '—'}</td>
+                      <td>
+                        <span className="placed-count-badge" title={`${placedCount} jobseeker(s) placed/hired`}>
+                          🎉 {placedDisplay}
+                        </span>
+                      </td>
+                      <td><span className="status-badge archived">Archived</span></td>
+                      <td style={{whiteSpace:'nowrap'}}>
+                        <button className="btn-secondary" onClick={() => handleViewJob(job, 'archived')}>View</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="no-jobs">
+            <div className="no-jobs-icon">📦</div>
+            <h3>No Archived Jobs</h3>
+            <p>No completed job placements found. Jobs are archived when all positions are filled.</p>
           </div>
         )}
       </>
@@ -1680,6 +2029,18 @@ const JobManagementSimplified = () => {
             ✅ Approved Job Vacancy
           </button>
           <button 
+            className={`tab ${activeTab === 'rejected' ? 'active' : ''}`}
+            onClick={() => setActiveTab('rejected')}
+          >
+            ❌ Rejected Job Vacancy
+          </button>
+          <button 
+            className={`tab ${activeTab === 'archived' ? 'active' : ''}`}
+            onClick={() => setActiveTab('archived')}
+          >
+            📦 Archived (Complete Job Placement)
+          </button>
+          <button 
             className={`tab ${activeTab === 'refer' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('refer');
@@ -1694,6 +2055,8 @@ const JobManagementSimplified = () => {
         <div className="tab-content">
           {activeTab === 'pending' && renderPendingJobs()}
           {activeTab === 'approved' && renderApprovedJobs()}
+          {activeTab === 'rejected' && renderRejectedJobs()}
+          {activeTab === 'archived' && renderArchivedJobs()}
           {activeTab === 'refer' && renderReferJobseeker()}
         </div>
       </div>
@@ -1999,13 +2362,12 @@ const JobManagementSimplified = () => {
                 {selectedJob.jobType === 'pending' && (
                   <div className="approval-actions">
                     <button 
-                      className="btn-warning"
+                      className="btn-danger"
                       onClick={() => {
-                        setShowJobModal(false);
-                        handleEditJob(selectedJob);
+                        openRejectModal(selectedJob);
                       }}
                     >
-                      ✏️ Edit Job
+                      ❌ Reject Job
                     </button>
                     <button 
                       className="btn-primary"
@@ -2019,6 +2381,59 @@ const JobManagementSimplified = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Job Modal */}
+      {showRejectModal && jobToReject && (
+        <div 
+          className="modal-overlay" 
+          onClick={closeRejectModal}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reject-modal-title"
+        >
+          <div 
+            className="modal-content reject-modal" 
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2 id="reject-modal-title">❌ Reject Job Vacancy</h2>
+            </div>
+            <div className="modal-body">
+              <p>
+                Provide a brief note explaining why <strong>{jobToReject.position_title || jobToReject.title}</strong> from <strong>{jobToReject.business_name}</strong> is being rejected.
+                This note will be shared with the employer via notifications, email, SMS, and the rejected jobs tab.
+              </p>
+              <div className="form-group">
+                <label htmlFor="reject-reason-input">Rejection Note *</label>
+                <textarea
+                  id="reject-reason-input"
+                  className="form-textarea"
+                  rows={4}
+                  placeholder="Example: Missing required business permit or supporting documents."
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                className="btn-secondary"
+                onClick={closeRejectModal}
+                disabled={isRejecting}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn-danger"
+                onClick={handleRejectModalSubmit}
+                disabled={isRejecting}
+              >
+                {isRejecting ? 'Rejecting...' : 'Reject Job'}
+              </button>
             </div>
           </div>
         </div>

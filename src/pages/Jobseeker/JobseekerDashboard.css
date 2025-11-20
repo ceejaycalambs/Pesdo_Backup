@@ -1303,6 +1303,11 @@
 
 .job-modal-footer .primary-btn {
   min-width: 140px;
+  opacity: 1;
+  cursor: pointer;
+}
+
+.job-modal-footer .primary-btn:disabled {
   opacity: 0.85;
   cursor: not-allowed;
 }

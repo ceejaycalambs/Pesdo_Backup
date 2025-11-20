@@ -575,7 +575,23 @@ const JobseekerDashboard = () => {
           place_of_work: job.place_of_work || null
         };
       });
-      setJobs(normalizedJobs);
+      
+      // Filter out completed jobs (all vacancies filled) - jobseekers shouldn't see these
+      const availableJobs = normalizedJobs.filter((job) => {
+        // If no vacancy count specified, show the job (can't determine if complete)
+        if (job.vacancyCount === null || job.vacancyCount === undefined) {
+          return true;
+        }
+        // If vacancy count is 0, show the job (edge case)
+        if (job.vacancyCount === 0) {
+          return true;
+        }
+        // Hide job if all vacancies are filled (acceptedCount >= vacancyCount)
+        const acceptedCount = job.acceptedCount || 0;
+        return acceptedCount < job.vacancyCount;
+      });
+      
+      setJobs(availableJobs);
 
       const normalizedApplications = applicationsData.map((application) => {
         const job = jobMap.get(application.job_id) || {};
@@ -779,12 +795,6 @@ const JobseekerDashboard = () => {
     return validFromDate <= today; // Valid if today or in the past
   }, [selectedJob]);
 
-  const applyButtonLabel = useMemo(() => {
-    if (hasAppliedToSelectedJob) return 'Applied';
-    if (isApplying) return 'Applying…';
-    if (!isJobValidForApplication) return 'Not Yet Open';
-    return 'Apply Now';
-  }, [hasAppliedToSelectedJob, isApplying, isJobValidForApplication]);
 
   const jobModalDetails = useMemo(() => {
     if (!selectedJob) return null;
@@ -850,15 +860,41 @@ const JobseekerDashboard = () => {
       certification: selectedJob.certification || 'Not specified',
       language: selectedJob.language_dialect || 'Not specified',
       acceptsPwd: selectedJob.accepts_pwd || 'Not specified',
-      pwdTypes: pwdTypesLabel,
+      pwdTypes: selectedJob.pwd_types || [],
       pwdOthers: selectedJob.pwd_others_specify || '—',
       acceptsOfw: selectedJob.accepts_ofw || 'Not specified',
       validFrom: formattedValidFrom,
       validUntil: formattedValidUntil
     };
-  }, [selectedJob]);
+  }, [selectedJob, formatDate]);
 
-  const profileAvatarUrl = profile?.profile_picture_url;
+  const applyButtonLabel = useMemo(() => {
+    if (hasAppliedToSelectedJob) return 'Applied';
+    if (isApplying) return 'Applying…';
+    if (!isJobValidForApplication) return 'Not Yet Open';
+    return 'Apply Now';
+  }, [hasAppliedToSelectedJob, isApplying, isJobValidForApplication]);
+
+  const applyButtonDisabledReason = useMemo(() => {
+    if (!selectedJob) return 'Select a job to apply.';
+    if (isApplying) return 'Submitting your application…';
+    if (!jobseekerId) return 'You must be signed in to apply.';
+    if (hasAppliedToSelectedJob) return 'You already applied for this job.';
+    if (!isJobValidForApplication) {
+      const validFromLabel = selectedJob.valid_from || selectedJob.validFrom || jobModalDetails?.validFrom;
+      return validFromLabel
+        ? `This job will be open for applications starting ${formatDate(validFromLabel)}.`
+        : 'This job is not yet open for applications.';
+    }
+    return '';
+  }, [selectedJob, isApplying, jobseekerId, hasAppliedToSelectedJob, isJobValidForApplication, jobModalDetails, formatDate]);
+
+  const isApplyButtonDisabled = useMemo(
+    () => Boolean(applyButtonDisabledReason),
+    [applyButtonDisabledReason]
+  );
+
+    const profileAvatarUrl = profile?.profile_picture_url;
 
   const profileDisplayName = useMemo(() => {
     const name = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim();
@@ -1380,23 +1416,11 @@ const JobseekerDashboard = () => {
   };
 
   const handleApplyToJob = async () => {
-    if (!selectedJob?.id || !jobseekerId || hasAppliedToSelectedJob || isApplying) return;
-
-    // Check if job is valid (valid_from must be today or in the past)
-    const validFrom = selectedJob.valid_from || selectedJob.validFrom;
-    if (validFrom) {
-      const validFromDate = new Date(validFrom);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      validFromDate.setHours(0, 0, 0, 0);
-      
-      if (validFromDate > today) {
-        setApplyFeedback({
-          type: 'error',
-          text: `This job is not yet open for applications. Applications will be accepted starting ${formatDate(validFrom)}.`
-        });
-        return;
+    if (!selectedJob?.id || isApplyButtonDisabled) {
+      if (applyButtonDisabledReason) {
+        setApplyFeedback({ type: 'info', text: applyButtonDisabledReason });
       }
+      return;
     }
 
     setIsApplying(true);
@@ -1646,8 +1670,8 @@ const JobseekerDashboard = () => {
               <div>Employer</div>
               <div>Position</div>
               <div>Assignment / Type</div>
-              <div>Match</div>
-              <div>Vacancies</div>
+              <div>Placed</div>
+              <div>Slot</div>
               <div>Salary</div>
               <div>Status</div>
               <div>Action</div>
@@ -1656,14 +1680,23 @@ const JobseekerDashboard = () => {
               {filteredJobs.map((job) => {
                 const jobIdDisplay = job.id ? job.id.toString().slice(0, 8).toUpperCase() : '—';
                 const assignmentType = `${job.location} / ${job.employmentType}`;
-                const matchDisplay =
-                  typeof job.matchPercentage === 'number'
-                    ? `${job.matchPercentage}%`
+                
+                // Calculate placed display: "placedCount/totalVacancies" (e.g., "1/6")
+                const placedCount = job.acceptedCount || 0;
+                const totalVacancies = job.vacancyCount;
+                const placedDisplay = 
+                  typeof totalVacancies === 'number' && totalVacancies > 0
+                    ? `${placedCount}/${totalVacancies}`
+                    : placedCount > 0
+                    ? `${placedCount}`
                     : '—';
-                const vacancyDisplay =
-                  job.vacancyCount !== null && job.vacancyCount !== undefined
-                    ? job.vacancyCount
+                
+                // Slot display: show total vacancies
+                const slotDisplay =
+                  totalVacancies !== null && totalVacancies !== undefined
+                    ? totalVacancies
                     : '—';
+                
                 const statusDisplay = job.postedAt
                   ? `Posted on ${formatDate(job.postedAt)}`
                   : `Posted on ${formatDate(job.createdAt)}`;
@@ -1692,8 +1725,8 @@ const JobseekerDashboard = () => {
                     </div>
                     <div className="job-table-cell job-position">{job.title}</div>
                     <div className="job-table-cell job-assignment">{assignmentType}</div>
-                    <div className="job-table-cell job-match">{matchDisplay}</div>
-                    <div className="job-table-cell job-vacancies">{vacancyDisplay}</div>
+                    <div className="job-table-cell job-match">{placedDisplay}</div>
+                    <div className="job-table-cell job-vacancies">{slotDisplay}</div>
                     <div className="job-table-cell job-salary">{job.salaryRange}</div>
                     <div className="job-table-cell job-status">{statusDisplay}</div>
                     <div className="job-table-cell job-action">
@@ -2516,14 +2549,8 @@ const JobseekerDashboard = () => {
                 type="button"
                 className="primary-btn"
                 onClick={handleApplyToJob}
-                disabled={
-                  !selectedJob ||
-                  hasAppliedToSelectedJob ||
-                  isApplying ||
-                  !jobseekerId ||
-                  !isJobValidForApplication
-                }
-                title={!isJobValidForApplication ? `This job will be open for applications starting ${jobModalDetails?.validFrom || 'a future date'}` : ''}
+                disabled={isApplyButtonDisabled}
+                title={applyButtonDisabledReason}
               >
                 {applyButtonLabel}
               </button>

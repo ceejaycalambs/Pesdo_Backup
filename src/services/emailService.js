@@ -350,7 +350,7 @@ export const sendEmployerVerificationEmail = async (email, employerName, status,
 };
 
 // Job approval notification (for employers)
-export const sendJobApprovalEmail = async (email, employerName, jobTitle, status) => {
+export const sendJobApprovalEmail = async (email, employerName, jobTitle, status, rejectionNote = null) => {
   const isApproved = status === 'approved';
   const html = `
     <!DOCTYPE html>
@@ -376,7 +376,8 @@ export const sendJobApprovalEmail = async (email, employerName, jobTitle, status
           ${isApproved 
             ? `<p>Your job vacancy "<strong>${jobTitle}</strong>" has been <strong>APPROVED</strong> and is now live on the PESDO platform!</p>
                <p>Jobseekers can now view and apply to this position. You will receive notifications when applications are submitted.</p>`
-            : `<p>Update on your job vacancy "<strong>${jobTitle}</strong>": ${status}.</p>
+            : `<p>Your job vacancy "<strong>${jobTitle}</strong>" has been <strong>REJECTED</strong>.</p>
+               ${rejectionNote ? `<p><strong>Reason:</strong> ${rejectionNote}</p>` : '<p>Please review the job requirements and submit again.</p>'}
                <p>Please check your dashboard for more details.</p>`
           }
           <p style="text-align: center;">
