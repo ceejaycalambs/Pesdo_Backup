@@ -907,6 +907,51 @@
 .action-buttons {
   display: flex;
   justify-content: center;
+  gap: 8px;
+}
+
+.action-buttons .btn-primary,
+.action-buttons .btn-secondary {
+  padding: 8px 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-buttons .btn-primary {
+  background: linear-gradient(135deg, #005177, #0079a1);
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 81, 119, 0.2);
+}
+
+.action-buttons .btn-primary:hover {
+  background: linear-gradient(135deg, #003d5c, #005177);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 81, 119, 0.3);
+}
+
+.action-buttons .btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 81, 119, 0.2);
+}
+
+.action-buttons .btn-secondary {
+  background: #6c757d;
+  color: white;
+  box-shadow: 0 2px 4px rgba(108, 117, 125, 0.2);
+}
+
+.action-buttons .btn-secondary:hover {
+  background: #5a6268;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(108, 117, 125, 0.3);
 }
 
 .btn-sm {

@@ -20,6 +20,8 @@ export function AuthProvider({ children }) {
   const isProcessingRef = useRef(false);
   const hasInitializedRef = useRef(false);
   const checkExistingSessionRunningRef = useRef(false);
+  const lastSignInTimeRef = useRef(0);
+  const signInDebounceTimeoutRef = useRef(null);
   
   // Reset profileLoaded when user changes (important for refresh)
   useEffect(() => {
@@ -213,19 +215,23 @@ export function AuthProvider({ children }) {
       }
       
       // Check admin by id with timeout protection
-      // If we have a strong hint (admin/super_admin), we can be more aggressive with timeouts
+      // If we have a strong hint (admin/super_admin), use minimal query and shorter timeout
       console.log('ℹ️ No employer profile found, checking admin...');
       console.log('🔍 Querying admin_profiles for ID:', userId);
       
-      // Use optimized query with only essential columns to reduce RLS overhead
+      // Use minimal query when we have a strong hint to reduce RLS overhead
+      const adminColumns = (hint === 'admin' || hint === 'super_admin') 
+        ? 'id, email, role'  // Minimal columns for faster query
+        : 'id, email, role, first_name, last_name, created_at, updated_at';  // Full columns if no hint
+      
       const adminQueryPromise = supabase
         .from('admin_profiles')
-        .select('id, email, role, first_name, last_name, created_at, updated_at')
+        .select(adminColumns)
         .eq('id', userId)
         .maybeSingle();
       
       // Shorter timeout if we have a strong hint, longer if not
-      const adminTimeout = (hint === 'admin' || hint === 'super_admin') ? 10000 : 15000;
+      const adminTimeout = (hint === 'admin' || hint === 'super_admin') ? 5000 : 15000;  // Reduced from 10s to 5s for strong hints
       const adminTimeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error(`Query timeout after ${adminTimeout/1000} seconds`)), adminTimeout)
       );
@@ -348,6 +354,9 @@ export function AuthProvider({ children }) {
         setUserData(fallbackProfile);
         setProfileLoaded(true);
         localStorage.setItem(`userType_${userId}`, role);
+        // Cache the fallback profile too
+        const profileToCache = { ...fallbackProfile, _cachedAt: Date.now() };
+        localStorage.setItem(`cachedProfile_${userId}`, JSON.stringify(profileToCache));
         console.log(`✅ Basic ${role} profile set (timeout fallback)`);
         return { success: true, profile: fallbackProfile, userType: role, role };
       }
@@ -366,6 +375,9 @@ export function AuthProvider({ children }) {
         // Store user type for future reference
         const userTypeForStorage = role === 'super_admin' ? 'super_admin' : 'admin';
         localStorage.setItem(`userType_${userId}`, userTypeForStorage);
+        // Cache the profile for quick access on subsequent SIGNED_IN events
+        const profileToCache = { ...profileData, _cachedAt: Date.now() };
+        localStorage.setItem(`cachedProfile_${userId}`, JSON.stringify(profileToCache));
         console.log('✅ profileLoaded set to true');
         // Return the correct userType based on role
         const userTypeForLog = role === 'super_admin' ? 'super_admin' : 'admin';
@@ -1286,8 +1298,43 @@ export function AuthProvider({ children }) {
             // Get stored user type hint to skip unnecessary queries
             const storedUserType = localStorage.getItem(`userType_${session.user.id}`);
             const userTypeHint = storedUserType || undefined;
+            
+            // Check if we have cached profile data for this user
+            const cachedProfileKey = `cachedProfile_${session.user.id}`;
+            const cachedProfile = localStorage.getItem(cachedProfileKey);
+            
+            // If we have a strong hint and cached profile, use it immediately
+            if ((userTypeHint === 'admin' || userTypeHint === 'super_admin') && cachedProfile) {
+              try {
+                const parsedProfile = JSON.parse(cachedProfile);
+                // Only use cache if it's recent (less than 5 minutes old)
+                const cacheAge = Date.now() - (parsedProfile._cachedAt || 0);
+                if (cacheAge < 300000) {  // 5 minutes
+                  console.log('✅ Using cached admin profile on INITIAL_SESSION (age:', Math.round(cacheAge / 1000), 's)');
+                  setUserData(parsedProfile);
+                  setProfileLoaded(true);
+                  hasInitializedRef.current = true;
+                  isProcessingRef.current = false;
+                  return;
+                } else {
+                  console.log('⏭️ Cached profile too old, fetching fresh');
+                  localStorage.removeItem(cachedProfileKey);
+                }
+              } catch (e) {
+                console.warn('⚠️ Failed to parse cached profile, fetching fresh');
+                localStorage.removeItem(cachedProfileKey);
+              }
+            }
+            
             const profileResult = await fetchUserProfile(session.user.id, session.user.email, { userTypeHint });
             console.log('📊 INITIAL_SESSION - Profile fetch completed:', profileResult?.success ? 'Success' : 'Failed');
+            
+            // Cache the profile if it's an admin
+            if (profileResult?.success && profileResult?.profile && (profileResult.userType === 'admin' || profileResult.role === 'super_admin')) {
+              const profileToCache = { ...profileResult.profile, _cachedAt: Date.now() };
+              localStorage.setItem(cachedProfileKey, JSON.stringify(profileToCache));
+            }
+            
             hasInitializedRef.current = true;
             isProcessingRef.current = false;
             return;
@@ -1315,6 +1362,21 @@ export function AuthProvider({ children }) {
           return;
         }
         
+        // Debounce rapid SIGNED_IN events (within 2 seconds)
+        const now = Date.now();
+        if (session?.user && now - lastSignInTimeRef.current < 2000) {
+          console.log('⏸️ Debouncing rapid SIGNED_IN event (within 2s of previous)');
+          isProcessingRef.current = false;
+          return;
+        }
+        lastSignInTimeRef.current = now;
+        
+        // Clear any existing debounce timeout
+        if (signInDebounceTimeoutRef.current) {
+          clearTimeout(signInDebounceTimeoutRef.current);
+          signInDebounceTimeoutRef.current = null;
+        }
+        
         setCurrentUser(session?.user || null);
         
         if (session?.user) {
@@ -1322,10 +1384,44 @@ export function AuthProvider({ children }) {
           const storedUserType = localStorage.getItem(`userType_${session.user.id}`);
           const userTypeHint = storedUserType || undefined;
           
+          // Check if we have cached profile data for this user
+          const cachedProfileKey = `cachedProfile_${session.user.id}`;
+          const cachedProfile = localStorage.getItem(cachedProfileKey);
+          
+          // If we have a strong hint and cached profile, use it immediately
+          if ((userTypeHint === 'admin' || userTypeHint === 'super_admin') && cachedProfile) {
+            try {
+              const parsedProfile = JSON.parse(cachedProfile);
+              // Only use cache if it's recent (less than 5 minutes old)
+              const cacheAge = Date.now() - (parsedProfile._cachedAt || 0);
+              if (cacheAge < 300000) {  // 5 minutes
+                console.log('✅ Using cached admin profile (age:', Math.round(cacheAge / 1000), 's)');
+                setUserData(parsedProfile);
+                setProfileLoaded(true);
+                hasInitializedRef.current = true;
+                isProcessingRef.current = false;
+                return;
+              } else {
+                console.log('⏭️ Cached profile too old, fetching fresh');
+                localStorage.removeItem(cachedProfileKey);
+              }
+            } catch (e) {
+              console.warn('⚠️ Failed to parse cached profile, fetching fresh');
+              localStorage.removeItem(cachedProfileKey);
+            }
+          }
+          
           console.log('🔄 SIGNED_IN - Fetching profile for:', session.user.email, userTypeHint ? `(hint: ${userTypeHint})` : '');
           isProcessingRef.current = true;
           const profileResult = await fetchUserProfile(session.user.id, session.user.email, { userTypeHint });
           console.log('📊 SIGNED_IN - Profile fetch completed:', profileResult?.success ? 'Success' : 'Failed');
+          
+          // Cache the profile if it's an admin
+          if (profileResult?.success && profileResult?.profile && (profileResult.userType === 'admin' || profileResult.role === 'super_admin')) {
+            const profileToCache = { ...profileResult.profile, _cachedAt: Date.now() };
+            localStorage.setItem(cachedProfileKey, JSON.stringify(profileToCache));
+          }
+          
           hasInitializedRef.current = true;
           isProcessingRef.current = false;
         } else {
